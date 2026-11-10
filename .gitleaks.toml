@@ -1,0 +1,27 @@
+# 公開 repo 用的 gitleaks 規則：預設規則 + 通用的「環境資訊」規則。
+# 公司或個人專用的關鍵字（網域、專案代號）不要寫在這裡，請寫在 .gitleaks.local.toml（已列入 .gitignore），
+# 並在本機用：gitleaks git --config .gitleaks.local.toml
+title = "Dev-Toolbox"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "toolbox-openai-style-key"
+description = "sk- 開頭的 API key"
+regex = '''\bsk-[A-Za-z0-9_\-]{16,}'''
+
+[[rules]]
+id = "toolbox-private-ip"
+description = "區網 IP（10.x、172.16-31.x、192.168.x）"
+regex = '''\b(10\.\d{1,3}|172\.(1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b'''
+
+[[rules]]
+id = "toolbox-windows-user-path"
+description = "含使用者名稱的 Windows 路徑"
+regex = '''(?i)[A-Z]:\\Users\\[^\\\s"'<>]+'''
+
+[allowlist]
+description = "範例與規格文件中的佔位符"
+paths = ['''spec/.*\.md''', '''CHANGELOG\.md''']
+regexes = ['''C:\\Users\\<[^>]+>''', '''192\.168\.0\.0''']

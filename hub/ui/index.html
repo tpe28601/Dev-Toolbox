@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f9">
+  <title>Dev-Toolbox</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/ui-kit.css">
+  <link rel="stylesheet" href="/hub.css">
+  <script src="/tb-theme.js"></script>
+</head>
+<body class="tb-app">
+  <div class="tb-shell hub-shell">
+    <aside class="tb-side" aria-label="工具列表">
+      <div class="tb-brand">
+        <span class="tb-brand__logo"><i data-tb-icon="terminal" data-size="18"></i></span>
+        <div class="tb-brand__text">
+          <h1 class="tb-brand__name">Dev-Toolbox</h1>
+          <div class="tb-brand__sub" id="hubVersion">&nbsp;</div>
+        </div>
+      </div>
+      <nav class="tb-nav" id="toolNav"></nav>
+      <div class="hub-side-bottom">
+        <a class="tb-nav__item" href="?page=settings" id="navSettings" title="設定"><i data-tb-icon="settings" data-anim="spin"></i><span class="tb-nav__label">設定</span></a>
+      </div>
+      <div class="tb-side__foot" id="hubInfo">本機工具，只綁定 127.0.0.1</div>
+    </aside>
+
+    <main class="tb-main">
+      <!-- 工具頁 -->
+      <section class="hub-page" id="pageTool">
+        <div class="tb-toolbar hub-toolbar">
+          <div class="hub-toolbar__info">
+            <span class="hub-toolbar__name" id="toolName"></span>
+            <span class="tb-badge" id="toolBadge"></span>
+            <span class="tb-muted tb-small hub-toolbar__status" id="toolStatus" role="status" aria-live="polite"></span>
+          </div>
+          <div class="tb-row">
+            <button class="tb-btn tb-btn--primary" id="btnStart" type="button"><i data-tb-icon="play" data-anim="nudge"></i>啟動</button>
+            <button class="tb-btn tb-btn--danger" id="btnStop" type="button"><i data-tb-icon="square" data-anim="pop"></i>停止</button>
+            <button class="tb-btn tb-btn--icon" id="btnReload" type="button" title="重新載入"><i data-tb-icon="refresh-cw" data-anim="spin"></i></button>
+            <button class="tb-btn tb-btn--icon" id="btnPopout" type="button" title="在新視窗開啟"><i data-tb-icon="external-link" data-anim="nudge"></i></button>
+          </div>
+        </div>
+        <div class="tb-content hub-content">
+          <div class="hub-framebox tb-hidden" id="frameBox">
+            <iframe id="toolFrame" title="工具畫面" referrerpolicy="no-referrer"></iframe>
+          </div>
+          <div class="hub-placeholder" id="placeholder">
+            <div class="tb-card hub-placeholder__card">
+              <div class="tb-card__head">
+                <span class="tb-card__icon" id="phIcon"></span>
+                <div>
+                  <h2 class="tb-card__title" id="phTitle">載入中…</h2>
+                  <div class="tb-muted tb-small" id="phDesc"></div>
+                </div>
+              </div>
+              <dl class="hub-kv" id="phMeta"></dl>
+              <div class="tb-callout tb-hidden" id="phCallout"><i data-tb-icon="info"></i><div id="phHint"></div></div>
+              <div class="tb-row hub-placeholder__actions">
+                <button class="tb-btn tb-btn--primary" id="phStart" type="button"><i data-tb-icon="play" data-anim="nudge"></i>啟動這個工具</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 設定頁 -->
+      <section class="hub-page tb-hidden" id="pageSettings">
+        <div class="tb-content">
+          <div class="tb-page-head">
+            <div>
+              <h2 class="tb-page-head__title">設定</h2>
+              <div class="tb-page-head__sub">存在 Hub 的資料夾；由 Hub 啟動的工具會自動套用。</div>
+            </div>
+          </div>
+          <div class="tb-grid tb-grid--2">
+            <div class="tb-card">
+              <h3 class="tb-section-title"><i data-tb-icon="sun"></i>外觀</h3>
+              <div class="tb-stack">
+                <div class="tb-field"><span class="tb-field__label">深淺色</span>
+                  <div class="tb-seg" role="group" aria-label="深淺色">
+                    <button class="tb-seg__btn" data-mode="light" type="button"><i data-tb-icon="sun" data-anim="spin"></i>淺色</button>
+                    <button class="tb-seg__btn" data-mode="dark" type="button"><i data-tb-icon="moon" data-anim="wiggle"></i>深色</button>
+                    <button class="tb-seg__btn" data-mode="system" type="button"><i data-tb-icon="monitor" data-anim="pop"></i>跟隨系統</button>
+                  </div>
+                </div>
+                <div class="tb-field"><span class="tb-field__label">強調色</span>
+                  <div class="tb-swatches" id="swatches" role="group" aria-label="強調色"></div>
+                  <span class="tb-field__hint">切換後，嵌入的工具會立即跟著變。</span>
+                </div>
+              </div>
+            </div>
+            <div class="tb-card">
+              <h3 class="tb-section-title"><i data-tb-icon="terminal"></i>Python 直譯器</h3>
+              <div class="tb-stack">
+                <label class="tb-choice"><input type="radio" name="pyMode" value="auto">
+                  <span><span class="tb-choice__title">自動偵測（建議）</span><br><span class="tb-choice__desc">依序找：DEVTOOLBOX_PYTHON → 工具的 .venv → py 啟動器 → PATH 上的 python</span></span></label>
+                <div class="tb-list hub-py-list" id="pySources"></div>
+                <label class="tb-choice"><input type="radio" name="pyMode" value="manual">
+                  <span><span class="tb-choice__title">指定路徑</span><br><span class="tb-choice__desc">優先於自動偵測，對所有 Python 工具生效（需要 3.11 以上）</span></span></label>
+                <div class="tb-field tb-hidden" id="pyManual">
+                  <span class="tb-input-row">
+                    <input class="tb-input tb-input--mono" id="pyPath" placeholder="例：C:\Python312\python.exe" autocomplete="off">
+                    <button class="tb-btn" id="pyCheck" type="button"><i data-tb-icon="search" data-anim="pop"></i>檢查</button>
+                  </span>
+                  <span class="tb-field__hint" id="pyResult">貼上 python.exe 的完整路徑，按「檢查」確認版本。</span>
+                </div>
+                <div class="tb-row tb-row--end">
+                  <span class="tb-muted tb-small" id="pySaved"></span>
+                  <button class="tb-btn tb-btn--primary" id="pySave" type="button"><i data-tb-icon="save" data-anim="bounce"></i>儲存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="tb-toast-area" id="toastArea" aria-live="polite"></div>
+
+  <div class="tb-dialog-backdrop tb-hidden" id="confirmBackdrop">
+    <div class="tb-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <span class="tb-dialog__icon" id="confirmIcon"></span>
+      <h3 class="tb-dialog__title" id="confirmTitle">確認</h3>
+      <div class="tb-dialog__body" id="confirmText"></div>
+      <div class="tb-dialog__actions">
+        <button class="tb-btn" id="confirmCancel" type="button">取消</button>
+        <button class="tb-btn tb-btn--danger" id="confirmOk" type="button">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/tb-icons.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

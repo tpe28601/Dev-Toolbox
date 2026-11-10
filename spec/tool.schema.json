@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tpe28601/Dev-Toolbox/spec/tool.schema.json",
+  "title": "Dev-Toolbox tool.json",
+  "type": "object",
+  "required": ["specVersion", "kind", "id", "name", "version", "runtime"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "specVersion": { "const": 1 },
+    "kind": { "enum": ["tool", "hub"] },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "maxLength": 40 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?$"
+    },
+    "description": { "type": "string", "maxLength": 200 },
+    "icon": { "type": "string" },
+    "runtime": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["powershell", "python", "exe"] },
+        "min": { "type": "string" }
+      }
+    },
+    "web": {
+      "type": "object",
+      "required": ["entry", "defaultPort", "health"],
+      "additionalProperties": false,
+      "properties": {
+        "entry": { "type": "string" },
+        "exe": { "type": "string" },
+        "defaultPort": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "health": { "const": "/api/health" }
+      }
+    },
+    "cli": {
+      "type": "object",
+      "required": ["entry"],
+      "additionalProperties": false,
+      "properties": {
+        "entry": { "type": "string" },
+        "exe": { "type": "string" },
+        "menu": { "type": "boolean" },
+        "json": { "type": "boolean" }
+      }
+    },
+    "requires": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+      "uniqueItems": true
+    },
+    "dataDir": { "type": "string" },
+    "uiKit": { "type": "string", "description": "ui/ui-kit.css 的版本，由 Sync-UiKit.ps1 寫入" },
+    "uiKitTarget": { "type": "string", "description": "ui-kit.css 放置目錄（相對於工具根目錄），預設 ui；靜態檔不在 ui\\ 的工具才需要填" }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["web", "cli", "dataDir"] } }
+  ]
+}

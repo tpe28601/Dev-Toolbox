@@ -1,0 +1,9 @@
+[submodule "tools/Git-Ref-Manager"]
+	path = tools/Git-Ref-Manager
+	url = https://github.com/tpe28601/git-ref-manager.git
+[submodule "tools/Opencode-Cfg-Manager"]
+	path = tools/Opencode-Cfg-Manager
+	url = https://github.com/tpe28601/cfg-manager.git
+[submodule "tools/Key-Manager"]
+	path = tools/Key-Manager
+	url = https://github.com/tpe28601/key-manager.git

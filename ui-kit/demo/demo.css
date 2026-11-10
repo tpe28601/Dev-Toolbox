@@ -1,0 +1,12 @@
+/* 只給示範頁用的小調整 */
+.demo-ok { color: var(--tb-ok); }
+.demo-py-auto { margin-left: 28px; }
+.demo-danger { color: var(--tb-danger); }
+.demo-flow { display: flex; flex-direction: column; min-height: 100%; gap: 0; }
+.demo-flow .tb-jobpanel { margin-top: 24px; }
+.demo-icons { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.demo-icon { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 6px 10px; }
+.demo-icon .tb-icon { width: 24px; height: 24px; }
+.demo-icon__name { font-size: var(--tb-fs-xs); color: var(--tb-muted); font-family: var(--tb-mono); text-align: center; word-break: break-all; }
+.demo-icon__anim { font-size: 10.5px; color: var(--tb-accent); }
+@media (max-width: 760px) { .demo-hide-sm { display: none; } }

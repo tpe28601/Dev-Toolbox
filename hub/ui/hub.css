@@ -1,0 +1,37 @@
+/* Dev-Toolbox Hub 專屬樣式。共用 token／元件來自 ui-kit.css（3.0），本檔只做版面。 */
+.hub-shell .tb-brand__name { font-size: var(--tb-fs-lg); }
+.hub-side-bottom { border-top: 1px solid var(--tb-border); padding-top: var(--tb-space-2); margin-top: var(--tb-space-2); }
+.hub-nav__dot { margin-left: auto; }
+.hub-page { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.hub-toolbar { justify-content: space-between; padding-left: var(--tb-space-1); padding-right: 0; }
+.hub-toolbar__info { display: flex; align-items: center; gap: var(--tb-space-2); flex-wrap: wrap; min-width: 0; flex: 1; }
+.hub-toolbar__name { font-size: var(--tb-fs-xl); font-weight: 700; }
+.hub-toolbar__status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hub-content { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.hub-framebox { flex: 1; min-height: 0; border: 1px solid var(--tb-border); border-radius: var(--tb-radius-xl); overflow: hidden; background: var(--tb-surface); box-shadow: var(--tb-shadow-sm); }
+.hub-framebox iframe { display: block; width: 100%; height: 100%; border: 0; background: var(--tb-bg); }
+.hub-placeholder { flex: 1; overflow: auto; padding: var(--tb-space-5) var(--tb-space-2); }
+.hub-placeholder__card { width: min(600px, 100%); margin: 0 auto; }
+.hub-placeholder__actions { margin-top: var(--tb-space-4); }
+.hub-kv { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--tb-space-4); margin: var(--tb-space-3) 0; }
+.hub-kv dt { color: var(--tb-muted); }
+.hub-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.hub-py-list { margin-left: 28px; }
+.hub-py-list .tb-list__item { padding: 8px 12px; }
+#pageSettings .tb-content { padding: var(--tb-space-2) var(--tb-space-1) var(--tb-space-5); }
+@media (max-width: 640px) {
+  .hub-framebox { min-height: 75vh; }
+  .hub-content { overflow: visible; }
+  .hub-side-bottom { border-top: 0; border-left: 1px solid var(--tb-border); padding: 0 0 0 4px; margin: 0; }
+  .hub-py-list { margin-left: 0; }
+}
+.hub-py-result--ok { color: var(--tb-ok); }
+.hub-py-result--danger { color: var(--tb-danger); }
+@media (max-width: 960px) {
+  .hub-nav__dot { position: absolute; top: 6px; right: 6px; margin: 0; width: 7px; height: 7px; }
+}
+@media (max-width: 640px) {
+  .hub-toolbar__info { flex-basis: 100%; }
+  .hub-toolbar__name { font-size: var(--tb-fs-lg); }
+}
+#pageSettings .tb-grid { align-items: start; }

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f3f5f9">
+<title>Dev-Toolbox ui-kit 3.0 示範</title>
+<link rel="stylesheet" href="../ui-kit.css">
+<link rel="stylesheet" href="demo.css">
+<script src="../tb-theme.js"></script>
+</head>
+<body class="tb-app">
+<div class="tb-shell">
+  <!-- 側欄：Key Manager 風格的浮動卡片；窄視窗收成圖示列，再窄變成上方橫列 -->
+  <aside class="tb-side">
+    <div class="tb-brand">
+      <span class="tb-brand__logo"><i data-tb-icon="package" data-size="18"></i></span>
+      <div class="tb-brand__text">
+        <div class="tb-brand__name">Dev-Toolbox</div>
+        <div class="tb-brand__sub">ui-kit 3.0 示範</div>
+      </div>
+    </div>
+    <nav class="tb-nav" id="nav">
+      <a class="tb-nav__item" href="#overview" aria-current="page" title="總覽"><i data-tb-icon="layout-dashboard" data-anim="pop"></i><span class="tb-nav__label">總覽</span></a>
+      <a class="tb-nav__item" href="#components" title="元件"><i data-tb-icon="square" data-anim="wiggle"></i><span class="tb-nav__label">元件</span></a>
+      <a class="tb-nav__item" href="#workflow" title="工作流程"><i data-tb-icon="git-branch" data-anim="draw"></i><span class="tb-nav__label">工作流程</span></a>
+      <a class="tb-nav__item" href="#dialogs" title="對話框與提示"><i data-tb-icon="info" data-anim="bounce"></i><span class="tb-nav__label">對話框與提示</span></a>
+      <a class="tb-nav__item" href="#icons" title="圖標"><i data-tb-icon="eye" data-anim="pop"></i><span class="tb-nav__label">圖標</span></a>
+      <a class="tb-nav__item" href="#settings" title="設定"><i data-tb-icon="settings" data-anim="spin"></i><span class="tb-nav__label">設定</span></a>
+    </nav>
+    <div class="tb-side__foot">滑過按鈕、卡片、清單都會出現強調色框與圖標小動畫。<br>試著把視窗拉窄。</div>
+  </aside>
+
+  <main class="tb-main">
+    <div class="tb-toolbar">
+      <span class="tb-muted tb-small" id="crumb">總覽</span>
+      <span class="tb-spacer"></span>
+      <div class="tb-seg" role="group" aria-label="深淺色">
+        <button class="tb-seg__btn" data-mode="light" title="淺色"><i data-tb-icon="sun" data-anim="spin"></i><span class="demo-hide-sm">淺色</span></button>
+        <button class="tb-seg__btn" data-mode="dark" title="深色"><i data-tb-icon="moon" data-anim="wiggle"></i><span class="demo-hide-sm">深色</span></button>
+        <button class="tb-seg__btn" data-mode="system" title="跟隨系統"><i data-tb-icon="monitor" data-anim="pop"></i><span class="demo-hide-sm">系統</span></button>
+      </div>
+      <div class="tb-swatches" role="group" aria-label="強調色" id="swatches"></div>
+    </div>
+
+    <div class="tb-content">
+      <!-- ===================== 總覽 ===================== -->
+      <section class="demo-page" id="page-overview">
+        <div class="tb-page-head">
+          <div>
+            <h1 class="tb-page-head__title">總覽</h1>
+            <div class="tb-page-head__sub">Key Manager 的卡片外觀，搭配 Opencode Cfg Manager 的滑過框線互動。</div>
+          </div>
+          <span class="tb-spacer"></span>
+          <button class="tb-btn"><i data-tb-icon="refresh-cw" data-anim="spin"></i>重新整理</button>
+        </div>
+        <div class="tb-grid">
+          <div class="tb-card tb-card--interactive">
+            <div class="tb-card__head"><span class="tb-card__icon"><i data-tb-icon="git-branch" data-anim="draw"></i></span><span class="tb-card__label">Git Ref Manager</span><span class="tb-spacer"></span><span class="tb-dot tb-dot--ok"></span></div>
+            <div class="tb-card__value">執行中</div>
+            <div class="tb-muted tb-small">127.0.0.1:8756 · v3.1.1</div>
+          </div>
+          <div class="tb-card tb-card--interactive">
+            <div class="tb-card__head"><span class="tb-card__icon"><i data-tb-icon="package" data-anim="bounce"></i></span><span class="tb-card__label">Opencode Cfg Manager</span><span class="tb-spacer"></span><span class="tb-dot tb-dot--busy"></span></div>
+            <div class="tb-card__value">啟動中…</div>
+            <div class="tb-muted tb-small">等待 READY</div>
+          </div>
+          <div class="tb-card tb-card--interactive">
+            <div class="tb-card__head"><span class="tb-card__icon"><i data-tb-icon="key" data-anim="wiggle"></i></span><span class="tb-card__label">Key Manager</span><span class="tb-spacer"></span><span class="tb-dot"></span></div>
+            <div class="tb-card__value">未啟動</div>
+            <div class="tb-muted tb-small">Python 3.12（自動偵測）</div>
+          </div>
+        </div>
+        <h2 class="tb-section-title" style="margin-top:24px"><i data-tb-icon="history"></i>最近的工作</h2>
+        <div class="tb-list">
+          <div class="tb-list__item">
+            <i data-tb-icon="circle-check" class="tb-icon--lg demo-ok"></i>
+            <div class="tb-list__main"><div class="tb-list__title">本地同步：MyProject → MyProject_2</div><div class="tb-list__sub">更新 42 個 ref，略過 3 個 · 2 分鐘前</div></div>
+            <span class="tb-badge tb-badge--warn">成功但有略過</span>
+            <div class="tb-list__actions"><button class="tb-btn tb-btn--ghost tb-btn--icon tb-btn--sm" title="查看紀錄"><i data-tb-icon="eye" data-anim="pop"></i></button><button class="tb-btn tb-btn--ghost tb-btn--icon tb-btn--sm" title="再執行一次"><i data-tb-icon="refresh-cw" data-anim="spin"></i></button></div>
+          </div>
+          <div class="tb-list__item">
+            <i data-tb-icon="circle-x" class="tb-icon--lg demo-danger"></i>
+            <div class="tb-list__main"><div class="tb-list__title">打包設定檔</div><div class="tb-list__sub">找不到來源資料夾 · 1 小時前</div></div>
+            <span class="tb-badge tb-badge--danger">失敗</span>
+            <div class="tb-list__actions"><button class="tb-btn tb-btn--ghost tb-btn--icon tb-btn--sm" title="查看紀錄"><i data-tb-icon="eye" data-anim="pop"></i></button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 元件 ===================== -->
+      <section class="demo-page tb-hidden" id="page-components">
+        <div class="tb-page-head"><div><h1 class="tb-page-head__title">元件</h1><div class="tb-page-head__sub">所有工具共用同一份；工具自己的 CSS 只放版面微調。</div></div></div>
+        <div class="tb-grid tb-grid--2">
+          <div class="tb-card">
+            <h2 class="tb-section-title"><i data-tb-icon="square"></i>按鈕</h2>
+            <div class="tb-row">
+              <button class="tb-btn tb-btn--primary"><i data-tb-icon="play" data-anim="nudge"></i>執行</button>
+              <button class="tb-btn"><i data-tb-icon="eye" data-anim="pop"></i>預覽（Dry-Run）</button>
+              <button class="tb-btn tb-btn--danger"><i data-tb-icon="trash-2" data-anim="wiggle"></i>刪除</button>
+              <button class="tb-btn tb-btn--ghost"><i data-tb-icon="circle-help" data-anim="bounce"></i>說明</button>
+              <button class="tb-btn tb-btn--icon" title="瀏覽"><i data-tb-icon="folder-open" data-anim="bounce"></i></button>
+              <button class="tb-btn" disabled>停用</button>
+              <button class="tb-btn is-busy" id="busyBtn"><i data-tb-icon="loader"></i>處理中</button>
+            </div>
+            <div class="tb-row" style="margin-top:12px">
+              <button class="tb-btn tb-btn--sm"><i data-tb-icon="plus" data-anim="pop"></i>新增目的 Repo</button>
+              <button class="tb-btn tb-btn--sm tb-btn--ghost"><i data-tb-icon="copy" data-anim="pop"></i>複製</button>
+              <button class="tb-btn tb-btn--sm tb-btn--ghost"><i data-tb-icon="download" data-anim="bounce"></i>匯出</button>
+            </div>
+          </div>
+          <div class="tb-card">
+            <h2 class="tb-section-title"><i data-tb-icon="bookmark"></i>分頁與狀態</h2>
+            <div class="tb-tabs" role="tablist" id="demoTabs">
+              <button class="tb-tab" role="tab" aria-selected="true">本地同步</button>
+              <button class="tb-tab" role="tab" aria-selected="false">Fetch Origin</button>
+              <button class="tb-tab" role="tab" aria-selected="false">Worktree</button>
+            </div>
+            <div class="tb-row">
+              <span class="tb-badge tb-badge--ok"><span class="tb-dot tb-dot--ok"></span>連線正常</span>
+              <span class="tb-badge tb-badge--warn">略過 3</span>
+              <span class="tb-badge tb-badge--danger">失敗</span>
+              <span class="tb-badge tb-badge--accent">v3.1.1</span>
+              <span class="tb-badge tb-badge--dry">dry-run</span>
+            </div>
+            <div class="tb-progress" style="margin-top:14px"><div class="tb-progress__bar" style="width:62%"></div></div>
+            <div class="tb-progress tb-progress--indeterminate" style="margin-top:10px"><div class="tb-progress__bar"></div></div>
+          </div>
+          <div class="tb-card">
+            <h2 class="tb-section-title"><i data-tb-icon="file-code"></i>表單</h2>
+            <div class="tb-stack">
+              <label class="tb-field"><span class="tb-field__label">Repo A（來源）</span>
+                <span class="tb-input-row"><input class="tb-input tb-input--mono" placeholder="例：D:\MyProject"><button class="tb-btn tb-btn--icon" title="瀏覽"><i data-tb-icon="folder-open" data-anim="bounce"></i></button></span>
+                <span class="tb-field__hint">按 Enter 立即驗證</span></label>
+              <label class="tb-field"><span class="tb-field__label">檔名格式</span><input class="tb-input is-invalid" value="opencode-cfg_<ts>"><span class="tb-field__error">缺少副檔名 .zip</span></label>
+              <label class="tb-field"><span class="tb-field__label">範圍</span><select class="tb-select"><option>載入內建範圍…</option><option>只有 opencode.json</option></select></label>
+              <div class="tb-row">
+                <label class="tb-check"><input type="checkbox" checked>同步 refs/remotes/origin/*</label>
+                <label class="tb-check"><input type="checkbox">備份本地 Branch</label>
+                <label class="tb-switch"><input type="checkbox" checked>自動捲動</label>
+              </div>
+            </div>
+          </div>
+          <div class="tb-card">
+            <h2 class="tb-section-title"><i data-tb-icon="layout-dashboard"></i>表格與提示框</h2>
+            <div class="tb-table-wrap">
+              <table class="tb-table">
+                <thead><tr><th>Ref</th><th>A</th><th>B</th><th>動作</th></tr></thead>
+                <tbody>
+                  <tr><td class="tb-mono">origin/main</td><td class="tb-mono">a1b2c3d</td><td class="tb-mono">9f8e7d6</td><td><span class="tb-badge tb-badge--accent">更新</span></td></tr>
+                  <tr><td class="tb-mono">origin/feature/x</td><td class="tb-mono">44aa21e</td><td class="tb-muted">—</td><td><span class="tb-badge tb-badge--ok">新增</span></td></tr>
+                  <tr><td class="tb-mono">origin/a/b</td><td class="tb-mono">0c0ffee</td><td class="tb-mono">D/F 衝突</td><td><span class="tb-badge tb-badge--warn">略過</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="tb-stack" style="margin-top:12px">
+              <div class="tb-callout"><i data-tb-icon="info"></i><div>執行前會先預覽差異，確認後才寫入。</div></div>
+              <div class="tb-callout tb-callout--warn"><i data-tb-icon="triangle-alert"></i><div>B 的 origin URL 與 A 不同。</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 工作流程（Git Ref Manager 的版面＋底部工作面板） ===================== -->
+      <section class="demo-page tb-hidden" id="page-workflow">
+        <div class="demo-flow">
+          <div class="tb-page-head"><div><h1 class="tb-page-head__title">本地同步</h1><div class="tb-page-head__sub">Git Ref Manager 的版面：分頁＋表單＋底部工作面板。流程固定為「填寫 → 預覽 → 執行」。</div></div></div>
+          <div class="tb-tabs" role="tablist">
+            <button class="tb-tab" role="tab" aria-selected="true"><i data-tb-icon="refresh-cw" data-anim="spin"></i>本地同步</button>
+            <button class="tb-tab" role="tab" aria-selected="false"><i data-tb-icon="download" data-anim="bounce"></i>Fetch Origin</button>
+            <button class="tb-tab" role="tab" aria-selected="false"><i data-tb-icon="git-branch" data-anim="draw"></i>Worktree</button>
+            <span class="tb-spacer"></span>
+            <button class="tb-btn tb-btn--ghost tb-btn--sm"><i data-tb-icon="bookmark" data-anim="bounce"></i>設定檔</button>
+            <button class="tb-btn tb-btn--ghost tb-btn--sm"><i data-tb-icon="circle-help" data-anim="bounce"></i>功能說明</button>
+          </div>
+          <div class="tb-grid tb-grid--2">
+            <label class="tb-field"><span class="tb-field__label">Repo A（來源）</span><span class="tb-input-row"><input class="tb-input tb-input--mono" value="D:\MyProject"><button class="tb-btn tb-btn--icon"><i data-tb-icon="folder-open" data-anim="bounce"></i></button></span><span class="tb-field__hint"><span class="tb-dot tb-dot--ok"></span> main · origin 一致</span></label>
+            <div class="tb-field"><span class="tb-field__label">Repo B（目的，可多個）</span>
+              <div class="tb-list">
+                <div class="tb-list__item"><i data-tb-icon="hard-drive"></i><div class="tb-list__main"><div class="tb-list__title tb-mono">D:\MyProject_2</div></div><div class="tb-list__actions"><button class="tb-btn tb-btn--ghost tb-btn--icon tb-btn--sm" title="移除"><i data-tb-icon="x"></i></button></div></div>
+              </div>
+              <div><button class="tb-btn tb-btn--sm"><i data-tb-icon="plus" data-anim="pop"></i>新增目的 Repo</button></div>
+            </div>
+          </div>
+          <div class="tb-row" style="margin:16px 0">
+            <label class="tb-check"><input type="checkbox" checked>同步 refs/remotes/origin/*</label>
+            <label class="tb-check"><input type="checkbox">備份本地 Branch → refs/sync/source-heads/*</label>
+            <label class="tb-check"><input type="checkbox" checked>遞迴處理已初始化的 Submodule</label>
+          </div>
+          <div class="tb-row">
+            <button class="tb-btn" id="previewBtn"><i data-tb-icon="eye" data-anim="pop"></i>預覽差異</button>
+            <button class="tb-btn tb-btn--primary" id="runBtn"><i data-tb-icon="play" data-anim="nudge"></i>一鍵同步</button>
+            <label class="tb-check"><input type="checkbox">force（origin 不同仍執行）</label>
+          </div>
+
+          <div class="tb-jobpanel" id="job">
+            <div class="tb-jobpanel__head">
+              <span class="tb-jobpanel__title">工作面板</span>
+              <span class="tb-badge" id="jobState">待機</span>
+              <div class="tb-jobpanel__progress"><div class="tb-progress"><div class="tb-progress__bar" id="jobBar" style="width:0%"></div></div></div>
+              <label class="tb-switch tb-small"><input type="checkbox" checked>自動捲動</label>
+              <button class="tb-btn tb-btn--ghost tb-btn--icon tb-btn--sm" title="歷史紀錄"><i data-tb-icon="history" data-anim="spin"></i></button>
+              <button class="tb-btn tb-btn--ghost tb-btn--icon tb-btn--sm" id="jobToggle" title="收合"><i data-tb-icon="chevron-down"></i></button>
+            </div>
+            <div class="tb-jobpanel__body"><pre class="tb-log" id="log"><span class="dry">按「預覽差異」或「一鍵同步」看看效果。</span></pre></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 對話框與提示 ===================== -->
+      <section class="demo-page tb-hidden" id="page-dialogs">
+        <div class="tb-page-head"><div><h1 class="tb-page-head__title">對話框與提示</h1><div class="tb-page-head__sub">所有工具同一套：一般確認、不可逆動作要輸入名稱、右下角提示。</div></div></div>
+        <div class="tb-grid">
+          <div class="tb-card tb-card--hover"><h2 class="tb-section-title"><i data-tb-icon="circle-help"></i>一般確認</h2><p class="tb-muted">預設焦點在「取消」，Esc 關閉。</p><button class="tb-btn" id="openConfirm">停止工具…</button></div>
+          <div class="tb-card tb-card--hover"><h2 class="tb-section-title"><i data-tb-icon="triangle-alert"></i>不可逆動作</h2><p class="tb-muted">必須輸入目標名稱才會啟用按鈕（對應 CLI 的 Read-TbConfirmName）。</p><button class="tb-btn tb-btn--danger" id="openDanger"><i data-tb-icon="trash-2" data-anim="wiggle"></i>刪除 SSH 金鑰…</button></div>
+          <div class="tb-card tb-card--hover"><h2 class="tb-section-title"><i data-tb-icon="info"></i>提示訊息</h2><p class="tb-muted">成功 4 秒消失；錯誤停留較久，可手動關閉。</p>
+            <div class="tb-row"><button class="tb-btn tb-btn--sm" data-toast="ok">成功</button><button class="tb-btn tb-btn--sm" data-toast="warn">警告</button><button class="tb-btn tb-btn--sm" data-toast="danger">錯誤</button></div></div>
+          <div class="tb-card"><h2 class="tb-section-title"><i data-tb-icon="layout-dashboard"></i>空白狀態</h2>
+            <div class="tb-empty"><i data-tb-icon="folder" class="tb-icon--xl"></i><div>還沒有設定檔</div><button class="tb-btn tb-btn--sm tb-btn--primary"><i data-tb-icon="plus" data-anim="pop"></i>建立第一個</button></div></div>
+        </div>
+      </section>
+
+      <!-- ===================== 圖標 ===================== -->
+      <section class="demo-page tb-hidden" id="page-icons">
+        <div class="tb-page-head"><div><h1 class="tb-page-head__title">圖標</h1><div class="tb-page-head__sub">統一使用 Lucide（ISC 授權），線寬 2、圓角端點。滑過看動畫；下方標示建議的動畫。</div></div></div>
+        <div class="demo-icons" id="iconGrid"></div>
+      </section>
+
+      <!-- ===================== 設定（含 Python 路徑） ===================== -->
+      <section class="demo-page tb-hidden" id="page-settings">
+        <div class="tb-page-head"><div><h1 class="tb-page-head__title">設定</h1><div class="tb-page-head__sub">放在 Hub；工具由 Hub 啟動時自動套用。</div></div></div>
+        <div class="tb-grid tb-grid--2">
+          <div class="tb-card">
+            <h2 class="tb-section-title"><i data-tb-icon="sun"></i>外觀</h2>
+            <div class="tb-stack">
+              <div class="tb-field"><span class="tb-field__label">深淺色</span>
+                <div class="tb-seg" role="group">
+                  <button class="tb-seg__btn" data-mode="light"><i data-tb-icon="sun" data-anim="spin"></i>淺色</button>
+                  <button class="tb-seg__btn" data-mode="dark"><i data-tb-icon="moon" data-anim="wiggle"></i>深色</button>
+                  <button class="tb-seg__btn" data-mode="system"><i data-tb-icon="monitor" data-anim="pop"></i>跟隨系統</button>
+                </div></div>
+              <div class="tb-field"><span class="tb-field__label">強調色</span><div class="tb-swatches" id="swatches2"></div><span class="tb-field__hint">只換按鈕、選取、連結等強調色，底色維持中性。</span></div>
+            </div>
+          </div>
+          <div class="tb-card">
+            <h2 class="tb-section-title"><i data-tb-icon="terminal"></i>Python 直譯器</h2>
+            <div class="tb-stack">
+              <label class="tb-choice"><input type="radio" name="py" value="auto" checked>
+                <span><span class="tb-choice__title">自動偵測（建議）</span><br><span class="tb-choice__desc">依序找：DEVTOOLBOX_PYTHON → 工具的 .venv → py 啟動器 → PATH</span></span></label>
+              <div class="tb-list demo-py-auto">
+                <div class="tb-list__item"><span class="tb-dot"></span><div class="tb-list__main"><div class="tb-list__title">DEVTOOLBOX_PYTHON</div><div class="tb-list__sub">未設定</div></div></div>
+                <div class="tb-list__item"><span class="tb-dot tb-dot--warn"></span><div class="tb-list__main"><div class="tb-list__title">Key-Manager\.venv</div><div class="tb-list__sub">略過：指向不存在的 Python（別台電腦建立的）</div></div></div>
+                <div class="tb-list__item"><span class="tb-dot tb-dot--ok"></span><div class="tb-list__main"><div class="tb-list__title">py 啟動器 → Python 3.12.4</div><div class="tb-list__sub tb-mono">C:\Windows\py.exe</div></div><span class="tb-badge tb-badge--ok">使用中</span></div>
+              </div>
+              <label class="tb-choice"><input type="radio" name="py" value="manual">
+                <span><span class="tb-choice__title">指定路徑</span><br><span class="tb-choice__desc">優先於自動偵測；對所有 Python 工具生效</span></span></label>
+              <div class="tb-field demo-py-manual tb-hidden">
+                <span class="tb-input-row"><input class="tb-input tb-input--mono" id="pyPath" placeholder="例：C:\Python312\python.exe"><button class="tb-btn tb-btn--icon" title="瀏覽"><i data-tb-icon="folder-open" data-anim="bounce"></i></button><button class="tb-btn" id="pyCheck"><i data-tb-icon="search" data-anim="pop"></i>檢查</button></span>
+                <span class="tb-field__hint" id="pyResult">需要 Python 3.11 以上。</span>
+              </div>
+              <div class="tb-row tb-row--end"><button class="tb-btn tb-btn--primary"><i data-tb-icon="save" data-anim="bounce"></i>儲存</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="tb-toast-area" id="toasts" aria-live="polite"></div>
+<div class="tb-dialog-backdrop tb-hidden" id="dlg">
+  <div class="tb-dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <span class="tb-dialog__icon" id="dlgIcon"></span>
+    <h3 class="tb-dialog__title" id="dlgTitle"></h3>
+    <div class="tb-dialog__body" id="dlgBody"></div>
+    <label class="tb-field tb-hidden" id="dlgNameField"><span class="tb-field__label" id="dlgNameLabel"></span><input class="tb-input tb-input--mono" id="dlgName" autocomplete="off"></label>
+    <div class="tb-dialog__actions"><button class="tb-btn" id="dlgCancel">取消</button><button class="tb-btn tb-btn--primary" id="dlgOk">確定</button></div>
+  </div>
+</div>
+<script src="../tb-icons.js"></script>
+<script src="demo.js"></script>
+</body>
+</html>

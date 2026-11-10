@@ -1,0 +1,14 @@
+{
+  "$schema": "./spec/tool.schema.json",
+  "specVersion": 1,
+  "kind": "hub",
+  "id": "dev-toolbox",
+  "name": "Dev-Toolbox",
+  "version": "0.3.0",
+  "description": "Git Ref Manager、Opencode Cfg Manager、Key Manager 的統一入口",
+  "runtime": { "kind": "powershell", "min": "5.1" },
+  "web": { "entry": "hub/Hub-Web.ps1", "defaultPort": 8700, "health": "/api/health" },
+  "cli": { "entry": "hub/hub.ps1", "menu": true, "json": false },
+  "requires": ["git"],
+  "dataDir": "%LOCALAPPDATA%/DevToolbox/hub"
+}
