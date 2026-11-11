@@ -4,10 +4,10 @@
 
 | 工具 | 用途 | 語言 |
 | --- | --- | --- |
-| [Git-Ref-Manager](tools/Git-Ref-Manager) | Git ref、origin、worktree 管理 | PowerShell |
-| [Opencode-Cfg-Manager](tools/Opencode-Cfg-Manager) | opencode 設定打包、還原、部署 | PowerShell |
-| [Key-Manager](tools/Key-Manager) | SSH、GPG 金鑰管理 | Python |
-| [Build Runner](tools/Build-Runner/README.md) | 本機建置、Recipe、Log、產出物與排程 | Python |
+| [Git-Ref-Manager](https://github.com/tpe28601/git-ref-manager) | Git ref、origin、worktree 管理 | PowerShell |
+| [Opencode-Cfg-Manager](https://github.com/tpe28601/cfg-manager) | opencode 設定打包、還原、部署 | PowerShell |
+| [Key-Manager](https://github.com/tpe28601/key-manager) | SSH、GPG 金鑰管理 | Python |
+| [Build Runner](https://github.com/tpe28601/build-runner) | 本機建置、Recipe、Log、產出物與排程 | Python |
 
 ## 安裝
 
