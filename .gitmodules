@@ -7,3 +7,6 @@
 [submodule "tools/Key-Manager"]
 	path = tools/Key-Manager
 	url = https://github.com/tpe28601/key-manager.git
+[submodule "tools/Build-Runner"]
+	path = tools/Build-Runner
+	url = https://github.com/tpe28601/build-runner.git

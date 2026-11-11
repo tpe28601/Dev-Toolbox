@@ -229,7 +229,8 @@ function Start-ToolService([string]$Id) {
         'python' {
             $exe = Resolve-PythonExe $t.Dir
             if (-not $exe) { throw @{ code = 'ENV_MISSING'; message = '找不到 Python（建議在工具資料夾建立 .venv）' } }
-            $argList = @($entry, '--parent-pid', $PID, '--hub-origin', $hubOrigin)
+            # Start-Process joins ArgumentList into one command line.
+            $argList = @(('"{0}"' -f $entry), '--parent-pid', $PID, '--hub-origin', $hubOrigin)
         }
         'exe' {
             $exe = $entry

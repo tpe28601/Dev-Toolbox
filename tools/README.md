@@ -1,6 +1,6 @@
 # tools/
 
-三個工具以 git submodule 的方式放在這裡，每個都指向該工具 repo 的 tag。
+四個工具都以 Git submodule 收錄，每個都指向該工具 repo 的 tag。Hub 依各工具目錄中的 `tool.json` 自動掃描。[Build Runner](Build-Runner/README.md) 目前固定在 `v0.1.0`。
 
 第一次加入（各工具 repo 建好、打好第一個 tag 之後執行一次）：
 
@@ -8,6 +8,7 @@
 git submodule add https://github.com/tpe28601/git-ref-manager.git tools/Git-Ref-Manager
 git submodule add https://github.com/tpe28601/cfg-manager.git tools/Opencode-Cfg-Manager
 git submodule add https://github.com/tpe28601/key-manager.git tools/Key-Manager
+git submodule add https://github.com/tpe28601/build-runner.git tools/Build-Runner
 cd tools/Git-Ref-Manager && git checkout v1.1.1 && cd ../..
 git add .gitmodules tools && git commit -m "Add tools as submodules"
 ```
