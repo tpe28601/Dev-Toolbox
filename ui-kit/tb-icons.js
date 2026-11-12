@@ -1,10 +1,12 @@
-/* tb-icons 3.0.0 — Dev-Toolbox 共用圖標（Lucide, ISC License, https://lucide.dev）
+﻿/* tb-icons 3.2.0 — Dev-Toolbox 共用圖標（Lucide, ISC License, https://lucide.dev）
  * 正本在 Dev-Toolbox/ui-kit，請勿直接修改工具內的複本。
  * 用法：
  *   HTML：<i data-tb-icon="folder" data-anim="bounce"></i>  → 載入後自動換成 <svg class="tb-icon">
  *   JS  ：TbIcons.svg('check', { size: 14, anim: 'pop', cls: 'tb-icon--sm' }) 回傳 SVG 字串
  *         TbIcons.render(root) 重新掃描動態加入的節點
  * data-anim：spin｜bounce｜wiggle｜pop｜nudge｜draw（滑過按鈕／卡片時播放，見 ui-kit.css 第 12 節）
+ * 3.1.0：.tb-btn.is-busy 自動把按鈕圖標換成 loader 圓弧（配合 ui-kit 的 tb-spin），
+ *        移除 is-busy 後還原原圖標；原本就是 loader 的按鈕不重複處理。
  */
 (function () {
   'use strict';
@@ -59,7 +61,7 @@
     var cls = 'tb-icon' + (opt.cls ? ' ' + opt.cls : '');
     var anim = opt.anim ? ' data-anim="' + opt.anim + '"' : '';
     if (opt.anim === 'draw') body = body.replace(/<(path|line|polyline|polygon|circle|rect) /g, '<$1 pathLength="1" ');
-    return '<svg class="' + cls + '"' + anim + ' width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + body + '</svg>';
+    return '<svg class="' + cls + '" data-icon="' + name + '"' + anim + ' width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + body + '</svg>';
   }
 
   function render(root) {
@@ -69,9 +71,54 @@
       tmp.innerHTML = svg(name, { anim: el.getAttribute('data-anim'), size: el.getAttribute('data-size') && +el.getAttribute('data-size'), cls: el.className });
       el.replaceWith(tmp.firstChild);
     });
+    (root || document).querySelectorAll('.tb-btn').forEach(updateBusy);
+  }
+
+  /* ---- .tb-btn.is-busy → 圖標換成 loader 圓弧（轉圈由 ui-kit 的 tb-spin 負責） ---- */
+  function updateBusy(btn) {
+    var el = btn.querySelector('svg.tb-icon');
+    if (!el) return;
+    var busy = btn.classList.contains('is-busy');
+    if (busy && el.getAttribute('data-tb-busy') !== '1') {
+      if (el.getAttribute('data-icon') === 'loader') return;   // 本來就是圓弧
+      el.setAttribute('data-tb-busy', '1');
+      el._tbIconSaved = el.innerHTML;
+      el.innerHTML = P['loader'];
+    } else if (!busy && el.getAttribute('data-tb-busy') === '1') {
+      el.removeAttribute('data-tb-busy');
+      if (typeof el._tbIconSaved === 'string') el.innerHTML = el._tbIconSaved;
+      el._tbIconSaved = null;
+    }
+  }
+
+  var mo = new MutationObserver(function (list) {
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
+      if (m.type === 'attributes') {
+        if (m.target.classList && m.target.classList.contains('tb-btn')) updateBusy(m.target);
+      } else if (m.type === 'childList') {
+        if (m.target.nodeType === 1 && m.target.closest) {
+          var host = m.target.closest('.tb-btn');
+          if (host) updateBusy(host);
+        }
+        for (var j = 0; j < m.addedNodes.length; j++) {
+          var n = m.addedNodes[j];
+          if (n.nodeType !== 1 || !n.querySelectorAll) continue;
+          if (n.classList && n.classList.contains('tb-btn')) updateBusy(n);
+          else if (n.matches && n.matches('.tb-btn *')) {
+            var h2 = n.closest('.tb-btn');
+            if (h2) updateBusy(h2);
+          } else n.querySelectorAll('.tb-btn').forEach(updateBusy);
+        }
+      }
+    }
+  });
+  function startBusyWatch() {
+    document.querySelectorAll('.tb-btn').forEach(updateBusy);
+    mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
   }
 
   window.TbIcons = { svg: svg, render: render, names: Object.keys(P) };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { render(); });
-  else render();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { render(); startBusyWatch(); });
+  else { render(); startBusyWatch(); }
 })();

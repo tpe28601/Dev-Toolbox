@@ -1,4 +1,4 @@
-﻿# Sync-UiKit.ps1 — 把 ui-kit 正本（ui-kit.css、tb-theme.js、tb-icons.js、cli-kit.ps1）複製到 tools/ 底下每個工具。
+﻿# Sync-UiKit.ps1 — 把 ui-kit 正本（ui-kit.css、tb-theme.js、tb-icons.js、tb-dirpicker.js、cli-kit.ps1）複製到 tools/ 底下每個工具。
 # 只複製檔案、更新 tool.json 的 uiKit 欄位，不會自動 commit。
 # 用法： powershell -NoProfile -ExecutionPolicy Bypass -File ui-kit\Sync-UiKit.ps1 [-DryRun]
 
@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $css = Join-Path $PSScriptRoot 'ui-kit.css'
 $cli = Join-Path $PSScriptRoot 'cli-kit.ps1'
-$webFiles = @('ui-kit.css', 'tb-theme.js', 'tb-icons.js')
+$webFiles = @('ui-kit.css', 'tb-theme.js', 'tb-icons.js', 'tb-dirpicker.js')
 
 $first = (Get-Content -LiteralPath $css -TotalCount 1 -Encoding UTF8)
 if ($first -notmatch 'ui-kit (\d+\.\d+\.\d+)') { throw 'ui-kit.css 第一行找不到版本號（格式：/* ui-kit 1.2.3 ... */）' }

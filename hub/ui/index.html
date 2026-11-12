@@ -8,6 +8,7 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/ui-kit.css">
   <link rel="stylesheet" href="/hub.css">
+  <script src="/hub-bg.js"></script>
   <script src="/tb-theme.js"></script>
 </head>
 <body class="tb-app">
@@ -20,14 +21,38 @@
           <div class="tb-brand__sub" id="hubVersion">&nbsp;</div>
         </div>
       </div>
-      <nav class="tb-nav" id="toolNav"></nav>
+      <nav class="tb-nav hub-nav--page" aria-label="頁面">
+        <a class="tb-nav__item" href="?page=dash" id="navDash" title="總覽"><i data-tb-icon="layout-dashboard" data-anim="pop"></i><span class="tb-nav__label">總覽</span></a>
+      </nav>
+      <div class="hub-side__group">工具</div>
+      <nav class="tb-nav" id="toolNav" aria-label="工具"></nav>
       <div class="hub-side-bottom">
+        <a class="tb-nav__item" href="#" id="navTheme" title="切換深淺色"><i data-tb-icon="monitor"></i><span class="tb-nav__label">主題</span></a>
         <a class="tb-nav__item" href="?page=settings" id="navSettings" title="設定"><i data-tb-icon="settings" data-anim="spin"></i><span class="tb-nav__label">設定</span></a>
       </div>
       <div class="tb-side__foot" id="hubInfo">本機工具，只綁定 127.0.0.1</div>
     </aside>
 
     <main class="tb-main">
+      <!-- 總覽頁（預設首頁）：每個工具一張狀態卡（快速操作懸浮浮現）＋最近的工作 -->
+      <section class="hub-page tb-hidden" id="pageDash">
+        <div class="tb-content hub-dash">
+          <div class="tb-page-head">
+            <div>
+              <h2 class="tb-page-head__title">總覽</h2>
+              <div class="tb-page-head__sub" id="dashSummary">讀取中…</div>
+            </div>
+            <div class="tb-row tb-row--end hub-dash__actions">
+              <button class="tb-btn" id="dashRefresh" type="button" title="重新整理工具狀態"><i data-tb-icon="refresh-cw" data-anim="spin"></i>重新整理</button>
+              <button class="tb-btn tb-btn--danger" id="dashShutdown" type="button"><i data-tb-icon="square" data-anim="pop"></i>關閉 HUB</button>
+            </div>
+          </div>
+          <div class="hub-dash-grid" id="dashGrid"></div>
+          <div class="hub-act-head" id="dashActsHead"><i data-tb-icon="history"></i><span>最近的工作</span></div>
+          <div class="hub-act-list" id="dashActs"></div>
+        </div>
+      </section>
+
       <!-- 工具頁 -->
       <section class="hub-page" id="pageTool">
         <div class="tb-toolbar hub-toolbar">
@@ -37,16 +62,15 @@
             <span class="tb-muted tb-small hub-toolbar__status" id="toolStatus" role="status" aria-live="polite"></span>
           </div>
           <div class="tb-row">
-            <button class="tb-btn tb-btn--primary" id="btnStart" type="button"><i data-tb-icon="play" data-anim="nudge"></i>啟動</button>
             <button class="tb-btn tb-btn--danger" id="btnStop" type="button"><i data-tb-icon="square" data-anim="pop"></i>停止</button>
             <button class="tb-btn tb-btn--icon" id="btnReload" type="button" title="重新載入"><i data-tb-icon="refresh-cw" data-anim="spin"></i></button>
             <button class="tb-btn tb-btn--icon" id="btnPopout" type="button" title="在新視窗開啟"><i data-tb-icon="external-link" data-anim="nudge"></i></button>
           </div>
         </div>
         <div class="tb-content hub-content">
-          <div class="hub-framebox tb-hidden" id="frameBox">
-            <iframe id="toolFrame" title="工具畫面" referrerpolicy="no-referrer"></iframe>
-          </div>
+          <!-- 工具 iframe 由 app.js 依工具動態建立（每個工具一個 panel＋iframe），
+               切頁只 hide/show，不重建、不重新載入，保留工具頁面狀態 -->
+          <div class="hub-framebox tb-hidden" id="frameBox"></div>
           <div class="hub-placeholder" id="placeholder">
             <div class="tb-card hub-placeholder__card">
               <div class="tb-card__head">
@@ -89,6 +113,26 @@
                 <div class="tb-field"><span class="tb-field__label">強調色</span>
                   <div class="tb-swatches" id="swatches" role="group" aria-label="強調色"></div>
                   <span class="tb-field__hint">切換後，嵌入的工具會立即跟著變。</span>
+                </div>
+                <div class="tb-field"><span class="tb-field__label">主題風格</span>
+                  <div class="tb-seg hub-seg-wrap" role="group" aria-label="主題風格" id="bgSeg">
+                    <button class="tb-seg__btn" data-bg="plain" type="button">純色</button>
+                    <button class="tb-seg__btn" data-bg="glow" type="button">光暈</button>
+                    <button class="tb-seg__btn" data-bg="grid" type="button">網格</button>
+                    <button class="tb-seg__btn" data-bg="dots" type="button">點陣</button>
+                    <button class="tb-seg__btn" data-bg="dusk" type="button">暮色</button>
+                    <button class="tb-seg__btn" data-bg="forest" type="button">森林</button>
+                    <button class="tb-seg__btn" data-bg="mono" type="button">黑白</button>
+                    <button class="tb-seg__btn" data-bg="cyber" type="button">霓虹</button>
+                  </div>
+                  <span class="tb-field__hint">會改變整個 Hub 的色調與紋理；光暈會跟著強調色變色。不影響嵌入的工具頁面。</span>
+                </div>
+                <div class="tb-field"><span class="tb-field__label">風格強度</span>
+                  <div class="tb-seg" role="group" aria-label="風格強度" id="strengthSeg">
+                    <button class="tb-seg__btn" data-strength="bold" type="button">明顯</button>
+                    <button class="tb-seg__btn" data-strength="soft" type="button">內斂</button>
+                  </div>
+                  <span class="tb-field__hint">明顯：表面半透明毛玻璃、紋理清楚；內斂：只微調色調、表面不透明。</span>
                 </div>
               </div>
             </div>

@@ -2,13 +2,16 @@
 # 純 PowerShell（HttpListener／http.sys），不需要管理者權限。只綁 127.0.0.1。
 # 職責：列出 tools\ 下符合 TOOL-SPEC 的工具、啟動／停止它們的 Web 服務、
 #       前端用 iframe 在同一視窗切換工具畫面。
-# 用法： .\Hub-Web.ps1 [-Port 8700] [-OpenBrowser] [-DataDir <路徑>]
+# 用法： .\Hub-Web.ps1 [-Port 8700] [-OpenBrowser] [-Force] [-DataDir <路徑>]
 # 啟動成功時 stdout 印出一行：READY http://127.0.0.1:<port>（TOOL-SPEC 第 5 節）
 # 沒指定 -Port 時：8700 起往上找 20 個，都不行就請系統配一個空的 port。
+# 單實例：啟動前先掃 port 範圍，發現既有 Hub 就直接開瀏覽器到舊實例並結束（exit 0）；
+#         加 -Force 可跳過偵測、強制再開一個實例（除錯用）。
 
 param(
     [int]$Port = 8700,
     [switch]$OpenBrowser,
+    [switch]$Force,
     [string]$DataDir
 )
 $script:PortExplicit = $PSBoundParameters.ContainsKey('Port')
@@ -207,6 +210,7 @@ function Start-ToolService([string]$Id) {
     if ($script:ToolProcs.ContainsKey($Id)) { throw @{ code = 'ALREADY_RUNNING'; message = "$Id 已在執行（port $($script:ToolProcs[$Id].Port)）" } }
     $st = Get-ToolStatus $t
     if ($st) { throw @{ code = 'ALREADY_RUNNING'; message = "$Id 已在 127.0.0.1:$($st.port) 運行（非 Hub 啟動）" } }
+    if (-not $t.Manifest.web) { throw @{ code = 'BAD_ARGS'; message = "$Id 沒有 Web 模式，請用 CLI：hub run $Id" } }
 
     $entryRel = [string]$t.Manifest.web.entry
     $entry = Join-Path $t.Dir $entryRel
@@ -299,6 +303,168 @@ function Stop-ToolService([string]$Id) {
     return [pscustomobject]@{ stopped = $true; clean = $done }
 }
 
+# ---------------- 卡片副標與工作歷史（總覽頁用） ----------------
+$script:RuntimeDetailCache = @{}
+
+function Get-RuntimeDetail($t) {
+    # 未啟動卡片的副標：「Python 3.12.7（自動偵測）」／「Windows PowerShell 5.1」。
+    # /api/tools 每幾秒會被輪詢，候選掃描與直譯器版本都進快取
+    # （venv 事後新增／移除要重啟 Hub 才更新，可接受）。
+    $kind = [string]$t.Manifest.runtime.kind
+    if ($kind -eq 'powershell') { return "Windows PowerShell $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)" }
+    if ($kind -ne 'python') { return $kind }
+    $key = "cand|$($t.Id)|$((Get-HubSettings).pythonPath)"
+    if (-not $script:RuntimeDetailCache.ContainsKey($key)) {
+        $script:RuntimeDetailCache[$key] = @(Get-PythonCandidates $t.Dir | Where-Object { $_.found }) | Select-Object -First 1
+    }
+    $first = $script:RuntimeDetailCache[$key]
+    if (-not $first) { return 'Python（未找到直譯器）' }
+    $vkey = "ver|$($first.source)|$($first.path)"
+    if (-not $script:RuntimeDetailCache.ContainsKey($vkey)) {
+        $v = Get-PythonVersion $first.path
+        $script:RuntimeDetailCache[$vkey] = if ($v.ok) { $v.version } else { '' }
+    }
+    $ver = [string]$script:RuntimeDetailCache[$vkey]
+    $tag = switch ($first.source) {
+        'settings' { 'Hub 設定' }
+        'venv'     { '工具 .venv' }
+        'env'      { '環境變數' }
+        default    { '自動偵測' }
+    }
+    if ($ver) { return "Python $ver（$tag）" }
+    return "Python（$tag）"
+}
+
+function Read-JsonlTail([string]$Path, [int]$Count, [switch]$Head) {
+    # 讀 jsonl 的最新 N 筆（預設檔尾＝最新；OCM 的歷史檔最新在前，用 -Head）。
+    # 用 FileShare.ReadWrite 開啟，工具正在附掛寫入時也能讀；單行解析壞了略過。
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+    $lines = $null
+    try {
+        $fs = New-Object System.IO.FileStream($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try {
+            $bytes = New-Object byte[] $fs.Length
+            if ($bytes.Length -gt 0) { [void]$fs.Read($bytes, 0, $bytes.Length) }
+        } finally { $fs.Dispose() }
+        $lines = [System.Text.Encoding]::UTF8.GetString($bytes) -split "`n"
+        if ($lines.Count -gt 0) { $lines[0] = $lines[0].TrimStart([char]0xFEFF) }   # 防 BOM 殘留
+    } catch { return @() }
+    $out = @()
+    if ($Head) { $idx = 0; $dir = 1; $stop = $lines.Count }
+    else { $idx = $lines.Count - 1; $dir = -1; $stop = -1 }
+    while ($out.Count -lt $Count -and $idx -ne $stop) {
+        $ln = (([string]$lines[$idx]) -replace "`r", '').Trim()
+        if ($ln) { try { $out += ($ln | ConvertFrom-Json) } catch { } }
+        $idx += $dir
+    }
+    return $out
+}
+
+function ConvertTo-TimeMs([string]$s) {
+    # ISO8601（含／不含 offset）或 'yyyy-MM-dd HH:mm:ss' → epoch ms；失敗回 0
+    if (-not $s) { return 0 }
+    try { return ([System.DateTimeOffset]::Parse($s, [System.Globalization.CultureInfo]::InvariantCulture)).ToUnixTimeMilliseconds() } catch { return 0 }
+}
+
+function Cut-Text([string]$s, [int]$Max) {
+    $s = [string]$s
+    if ($s.Length -le $Max) { return $s }
+    return $s.Substring(0, $Max - 1) + [char]0x2026
+}
+
+function Get-Activity([int]$Limit) {
+    # 聚合各工具真實工作歷史：直接讀 dataDir 的 history.jsonl（工具沒啟動也查得到）。
+    # 只列有操作記錄概念的工具：Build Runner（建置）、Git Ref Manager（同步等 job）、
+    # Opencode Cfg Manager（打包／解開／複製）。歸一化成 {tool,title,detail,time,status}。
+    $items = @()
+    if (-not $env:LOCALAPPDATA) { return [pscustomobject]@{ ok = $true; result = @() } }
+    $base = Join-Path $env:LOCALAPPDATA 'DevToolbox'
+
+    # Build Runner：state success/failed/stopped，時間為 UTC ISO
+    foreach ($h in @(Read-JsonlTail (Join-Path $base 'build-runner\history.jsonl') 30)) {
+        $st = switch ($h.state) { 'success' { 'ok' } 'stopped' { 'warn' } 'failed' { 'fail' } default { 'warn' } }
+        $title = Cut-Text (@(@($h.workspace, $h.recipe) | Where-Object { $_ }) -join ' · ') 90
+        if (-not $title) { $title = '建置' }
+        $det = @()
+        if ($h.state -ne 'success') {
+            if ($h.rootError -and $h.rootError.text) { $det += Cut-Text ([string]$h.rootError.text) 120 }
+            elseif ($h.message) { $det += Cut-Text ([string]$h.message) 120 }
+        }
+        if ($null -ne $h.durationSec) {
+            $m = [Math]::Round([double]$h.durationSec / 60)
+            $det += $(if ($m -ge 1) { "耗時 $m 分" } else { "耗時 $([Math]::Round([double]$h.durationSec)) 秒" })
+        }
+        $items += [pscustomobject]@{ tool = 'build-runner'; title = $title; detail = ($det -join '，')
+            time = (ConvertTo-TimeMs ([string]$h.endedAt)); status = $st }
+    }
+
+    # Git Ref Manager：job 歷史，state Done/Failed（Running 不會落盤），時間為本地 'yyyy-MM-dd HH:mm:ss'
+    foreach ($h in @(Read-JsonlTail (Join-Path $base 'git-ref-manager\history.jsonl') 30)) {
+        if ($h.kind -eq 'sync-preview') { continue }   # 預覽不是實際工作，不進時間軸
+        $kindCn = switch ($h.kind) {
+            'sync-apply'    { '本地同步' }
+            'sync-preview'  { '同步預覽' }
+            'fetch'         { '抓取遠端' }
+            'worktree'      { '建工作樹' }
+            default         { [string]$h.kind }
+        }
+        $title = $kindCn
+        if ($h.meta) {
+            $srcName = if ($h.meta.src) { Split-Path ([string]$h.meta.src) -Leaf } else { '' }
+            $nDst = @(($h.meta.dsts | ForEach-Object { Split-Path ([string]$_) -Leaf }) | Where-Object { $_ })
+            if ($srcName -and $nDst.Count -ge 1) {
+                $t1 = $nDst[0]
+                $more = if ($nDst.Count -gt 1) { " 等 $($nDst.Count) 個" } else { '' }
+                $title = "$kindCn：$srcName → $t1$more"
+            } elseif ($h.meta.branch) {
+                $title = "$kindCn：$([string]$h.meta.branch)"
+            }
+        }
+        $r = $h.result
+        $det = @()
+        if ($r.applied) { $det += "更新 $($r.applied) 個 ref" }
+        if ($r.created) { $det += "建立 $($r.created) 個" }
+        $sk = 0
+        if ($null -ne $r.conflictSkipped) { $sk += [int]$r.conflictSkipped }
+        # 落盤欄位是 skippedSubmodules 陣列（skippedCount 只是 GRM API 的顯示值）
+        if ($null -ne $r.skippedSubmodules) { $sk += @($r.skippedSubmodules).Count }
+        if ($sk -gt 0) { $det += "略過 $sk 個" }
+        # 注意：@($null).Count 是 1，必須先判 $null（sync-preview/worktree 沒有 failed 欄位）
+        $nFail = if ($null -ne $r.failed) { @($r.failed).Count } else { 0 }
+        if ($nFail -gt 0) { $det += "失敗 $nFail 個" }
+        if ($h.error) { $det += Cut-Text ([string]$h.error) 100 }
+        $st = 'ok'
+        if ($h.state -eq 'Failed' -or $nFail -gt 0) { $st = 'fail' } elseif ($sk -gt 0) { $st = 'warn' }
+        $items += [pscustomobject]@{ tool = 'git-ref-manager'; title = (Cut-Text $title 90); detail = ($det -join '，')
+            time = (ConvertTo-TimeMs ([string]$h.endedAt)); status = $st }
+    }
+
+    # Opencode Cfg Manager：欄位自帶 status，檔案最新在前 → 讀檔頭
+    foreach ($h in @(Read-JsonlTail (Join-Path $base 'opencode-cfg-manager\history.jsonl') 30 -Head)) {
+        $actCn = switch ($h.action) {
+            'pack'   { '打包設定檔' }
+            'unpack' { '解開設定檔' }
+            'copy'   { '複製設定' }
+            default  { [string]$h.action }
+        }
+        $title = if ($h.profile) { "$actCn：$([string]$h.profile)" } elseif ($h.detail) { "$actCn：$(Cut-Text ([string]$h.detail) 60)" } else { $actCn }
+        $det = @()
+        if ($h.source -and $h.target) { $det += "$(Split-Path ([string]$h.source) -Leaf) → $(Split-Path ([string]$h.target) -Leaf)" }
+        if ($h.count) { $det += "$($h.count) 個檔案" }
+        if ($h.bytes) {
+            $kb = [double]$h.bytes / 1KB
+            $det += $(if ($kb -ge 1024) { "$([Math]::Round($kb/1024, 1)) MB" } else { "$([Math]::Round($kb)) KB" })
+        }
+        $st = 'ok'
+        if ($h.status -match 'fail|error') { $st = 'fail' } elseif ($h.status -match 'warn|partial') { $st = 'warn' }
+        $items += [pscustomobject]@{ tool = 'opencode-cfg-manager'; title = (Cut-Text $title 90); detail = ($det -join '，')
+            time = (ConvertTo-TimeMs ([string]$h.time)); status = $st }
+    }
+
+    $items = @($items | Where-Object { $_.time -gt 0 } | Sort-Object { [long]$_.time } -Descending | Select-Object -First $Limit)
+    return [pscustomobject]@{ ok = $true; result = $items }
+}
+
 function Get-ToolsView {
     $out = @()
     foreach ($t in @(Get-Tools)) {
@@ -311,6 +477,7 @@ function Get-ToolsView {
             installed = $t.Installed
             error     = $t.Error
             runtime   = if ($t.Installed) { [string]$t.Manifest.runtime.kind } else { '' }
+            runtimeDetail = if ($t.Installed) { Get-RuntimeDetail $t } else { '' }
             web       = [bool]($t.Installed -and $t.Manifest.web)
             desc      = if ($t.Installed) { [string]$t.Manifest.description } else { '' }
             port      = if ($t.Installed -and $t.Manifest.web) { [int]$t.Manifest.web.defaultPort } else { 0 }
@@ -391,6 +558,7 @@ function Get-StaticFile([string]$path) {
         '/index.html'  = @('index.html', 'text/html; charset=utf-8', $script:UiDir)
         '/app.js'      = @('app.js', 'application/javascript; charset=utf-8', $script:UiDir)
         '/hub.css'     = @('hub.css', 'text/css; charset=utf-8', $script:UiDir)
+        '/hub-bg.js'   = @('hub-bg.js', 'application/javascript; charset=utf-8', $script:UiDir)
         '/ui-kit.css'  = @('ui-kit.css', 'text/css; charset=utf-8', $script:KitDir)
         '/tb-theme.js' = @('tb-theme.js', 'application/javascript; charset=utf-8', $script:KitDir)
         '/tb-icons.js' = @('tb-icons.js', 'application/javascript; charset=utf-8', $script:KitDir)
@@ -459,6 +627,20 @@ function Route-Request($req, $ctx) {
             }
             '/api/settings' {
                 Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; settings = (Get-HubSettings) })
+                return
+            }
+            '/api/activity' {
+                # $req 只有 RawUrl（見 Read-ClientRequest），query 自己拆
+                $lim = 0
+                $qs = (([string]$req.RawUrl) -split '\?', 2)
+                if ($qs.Count -eq 2) {
+                    foreach ($pair in ($qs[1] -split '&')) {
+                        $kv = $pair -split '=', 2
+                        if ($kv.Count -eq 2 -and $kv[0] -eq 'limit') { [void][int]::TryParse($kv[1], [ref]$lim) }
+                    }
+                }
+                if ($lim -lt 1 -or $lim -gt 100) { $lim = 20 }
+                Send-JsonRaw $ctx (Get-Activity $lim)
                 return
             }
             '/api/python' {
@@ -567,6 +749,27 @@ function Handle-Client($hctx) {
     }
 }
 
+
+# ---------------- 單實例偵測 ----------------
+# 同機重複啟動時不默默開第二個 Hub：先看範圍內是否已有 Hub 在聽（用 /api/health 認 id，
+# 不受 Windows 保留 port 影響），有就開瀏覽器連舊實例並結束。-Force 跳過（除錯用）。
+if (-not $Force) {
+    $scanPorts = if ($script:PortExplicit) { @($Port) } else { @($Port..($Port + 20)) }
+    foreach ($sp in $scanPorts) {
+        if (Test-PortFree $sp) { continue }
+        $hb = Invoke-ToolHttp "http://127.0.0.1:$sp/api/health" 'GET' 400
+        if ($hb -and $hb.ok -and [string]$hb.id -eq [string]$script:HubManifest.id) {
+            $existUrl = "http://127.0.0.1:$sp"
+            Write-Host "偵測到 Hub 已在執行：$existUrl（pid $($hb.pid)，版本 $($hb.version)）" -ForegroundColor Yellow
+            if ([string]$hb.version -ne [string]$script:HubManifest.version) {
+                Write-Host "  舊實例版本（$($hb.version)）與這次要啟動的（$($script:HubManifest.version)）不同；要升級請先停止舊 Hub 視窗。" -ForegroundColor Gray
+            }
+            Write-Host '已改為開啟既有 Hub，不重複啟動。除錯時要硬開第二實例請加 -Force。' -ForegroundColor Gray
+            Start-Process $existUrl
+            exit 0
+        }
+    }
+}
 
 # ---------------- 主迴圈 ----------------
 $listener = $null

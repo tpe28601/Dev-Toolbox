@@ -1,5 +1,6 @@
-/* ui-kit 3.0.0 — Dev-Toolbox 共用樣式。正本在 Dev-Toolbox/ui-kit，請勿直接修改工具內的複本。 */
-/* 搭配 tb-theme.js（深淺色／跟隨系統、強調色）與 tb-icons.js（Lucide 圖標）。示範頁：ui-kit/demo.html */
+/* ui-kit 3.2.0 — Dev-Toolbox 共用樣式。正本在 Dev-Toolbox/ui-kit，請勿直接修改工具內的複本。 */
+/* 搭配 tb-theme.js（深淺色／跟隨系統、強調色）、tb-icons.js（Lucide 圖標）與 tb-dirpicker.js（資料夾／檔案挑選器）。示範頁：ui-kit/demo.html
+ * 3.1.0：.tb-btn.is-busy 的圖標由 tb-icons.js 換成 loader 圓弧，本檔只負責轉圈。 */
 
 /* ============ 1. 設計 token ============ */
 :root {
@@ -365,6 +366,37 @@
 .tb-callout--warn { background: var(--tb-warn-soft); } .tb-callout--warn .tb-icon { color: var(--tb-warn); }
 .tb-callout--danger { background: var(--tb-danger-soft); } .tb-callout--danger .tb-icon { color: var(--tb-danger); }
 .tb-kbd { font-family: var(--tb-mono); font-size: var(--tb-fs-xs); padding: 1px 6px; border: 1px solid var(--tb-border-strong); border-bottom-width: 2px; border-radius: 5px; background: var(--tb-surface-2); }
+
+/* ============ 11.5 資料夾／檔案挑選器（tb-dirpicker.js） ============ */
+/* 元件掛在 document.body（.tb-app 之外），box-sizing 需自覆 */
+.tb-dp, .tb-dp *, .tb-dp *::before, .tb-dp *::after { box-sizing: border-box; }
+.tb-dp { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: var(--tb-space-4); background: rgba(5, 8, 16, 0.55); backdrop-filter: blur(2px); animation: tb-fade 140ms ease; }
+.tb-dp__box { width: min(680px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column; background: var(--tb-surface); color: var(--tb-text); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-xl); box-shadow: var(--tb-shadow); animation: tb-pop 160ms ease; }
+.tb-dp__head { display: flex; align-items: center; gap: var(--tb-space-2); padding: var(--tb-space-3) var(--tb-space-4) 0; }
+.tb-dp__title { font-weight: 650; font-size: var(--tb-fs-lg); flex: 1; }
+.tb-dp__toolbar { display: flex; gap: 6px; align-items: center; padding: var(--tb-space-2) var(--tb-space-4) 0; flex-wrap: wrap; }
+.tb-dp__toolbar .tb-btn { min-height: 30px; padding: 0 10px; font-size: var(--tb-fs-sm); }
+.tb-dp__pathrow { padding: var(--tb-space-2) var(--tb-space-4); }
+.tb-dp__path { width: 100%; font-family: var(--tb-mono); font-size: var(--tb-fs-sm); padding: 6px 10px; border: 1px solid var(--tb-border); border-radius: var(--tb-radius); background: var(--tb-surface-2); color: var(--tb-text); }
+.tb-dp__path:focus-visible { outline: none; box-shadow: var(--tb-focus); border-color: var(--tb-accent); }
+.tb-dp__list { flex: 1; overflow: auto; min-height: 200px; max-height: 46vh; padding: 0 var(--tb-space-2) var(--tb-space-2); }
+.tb-dp__item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--tb-radius); border: 1px solid transparent; cursor: pointer; transition: background var(--tb-transition), border-color var(--tb-transition); }
+.tb-dp__item:hover { background: var(--tb-accent-soft); border-color: var(--tb-accent-ring); }
+.tb-dp__item > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-dp__item--repo > span:first-of-type { color: var(--tb-accent); }
+.tb-dp__item--file { color: var(--tb-muted); }
+.tb-dp__item--file:hover { color: var(--tb-text); }
+.tb-dp__tag { flex: none !important; color: var(--tb-ok); font-size: var(--tb-fs-xs); border: 1px solid var(--tb-ok); border-radius: 4px; padding: 0 5px; }
+.tb-dp__empty { color: var(--tb-muted); padding: 14px; text-align: center; }
+.tb-dp__foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--tb-space-2); padding: var(--tb-space-3) var(--tb-space-4); border-top: 1px solid var(--tb-border); }
+.tb-dp__hint { flex: 1; color: var(--tb-warn); font-size: var(--tb-fs-sm); }
+@media (max-width: 560px) {
+  .tb-dp__toolbar .tb-btn { padding: 0 8px; }
+  .tb-dp__list { max-height: 40vh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tb-dp, .tb-dp__box { animation: none; }
+}
 
 /* ============ 12. 圖標（Lucide，tb-icons.js）與滑過動畫 ============ */
 .tb-icon { width: 16px; height: 16px; flex: none; display: inline-block; vertical-align: -3px; stroke-width: 2; }

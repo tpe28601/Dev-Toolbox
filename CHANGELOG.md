@@ -2,6 +2,28 @@
 
 格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版本遵循 SemVer。
 
+## [0.4.0] - 2026-11-12
+
+### 新增
+- Hub 總覽新增工具狀態卡、執行中工具數、Hub 運行時間與「最近的工作」。狀態卡支援啟動、停止與在新視窗開啟，近期工作可點進對應工具。
+- Hub 新增「關閉 HUB」按鈕。確認後關閉 Hub，並停止由 Hub 啟動的工具。
+- 新增深淺色快速切換、八種主題風格與兩種強度。支援網址參數預覽與單實例啟動。
+- 納入 HLK Viewer v1.2.4 與 Script-Editor v0.1.0。HLK Viewer 支援 Web 瀏覽、分析與匯出 `.hlkx`、`.hlkp` 報告。Script-Editor 可視覺化編排並匯出批次腳本。
+- Build Runner 新增 AI 分析範圍與提示詞預覽、log 下載及 `Clean + Build (-nou)` Recipe。
+- ui-kit 更新到 3.2.0，新增共用資料夾與檔案挑選器、Git Repo 掃描及按鈕載入動畫。
+
+### 變更
+- 工具頁使用各自的 iframe，切頁時保留工具狀態。啟動入口集中在未啟動畫面，執行中可從工具列停止或重新載入。
+- 統一工具分頁樣式並改善寬螢幕版面。總覽顯示工具的實際執行環境，重新整理與關閉按鈕靠右排列。
+- 更新 Git Ref Manager、Opencode Cfg Manager、Key Manager 與 Build Runner 的 submodule pin。
+- 更新版號規則。日常提交可升 PATCH，重大功能或流程改版升 MINOR，三段版號皆可超過 9。
+
+### 修正
+- Build Runner 改善長 log 開啟、搜尋與錯誤判讀。刪除歷史時一併移除 Job 目錄，並修正成功紀錄誤顯示錯誤的問題。
+- Git Ref Manager 重新整理後保留分頁、捲動偏好與設定，並續追執行中的工作。
+- Key Manager 修正圖示重複渲染。HLK Viewer 修正 WTL 時間戳與報表顯示。
+- Hub 讀取工具歷史時允許工具同步寫入。「最近的工作」略過 Git Ref Manager 的同步預覽。
+
 ## [0.3.0] - 2026-11-10
 
 ### 新增

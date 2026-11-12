@@ -47,8 +47,10 @@
 ```
 
 - `id`：小寫英數與連字號，全域唯一，也是資料夾名稱。
-- `version`：SemVer，必須與 git tag（`v3.1.0`）及 CHANGELOG 一致。
+- `version`：SemVer，記錄目前開發版號。正式發布時，該提交的版號須與 Git tag（如 `v3.1.0`）及 CHANGELOG 一致。
 - `runtime.kind`：`powershell`、`python` 或 `exe`。
+- `web` 與 `cli` 至少要有一個：沒有 Web 介面（如 GUI／純批次工具 HLK Viewer）可省略 `web`，
+  Hub 列表會顯示「只有 CLI」並引導 `hub run <id>`；兩者皆省則不合規格。無持久化資料的工具可省略 `dataDir`。
 - `web.exe`（選填）：打包好的執行檔；Hub 優先使用，找不到才依 `runtime` 執行 `web.entry`。
 - `runtime.kind = python` 時，Hub 依序尋找直譯器：環境變數 `DEVTOOLBOX_PYTHON` →
   工具資料夾的 `.venv\Scripts\python.exe` → `py` 啟動器 → PATH 上的 `python`（跳過 WindowsApps 佔位程式）。
@@ -190,6 +192,29 @@ PowerShell 工具的 Web 伺服器請用 `System.Net.HttpListener`（http.sys）
 
 ## 8. 版本
 
-- SemVer；大版號只在 CLI 參數、API、tool.json 格式不相容時升。
-- Hub 的 submodule 一律指向工具的 tag。
+版號格式為 `MAJOR.MINOR.PATCH`。三段都是獨立的非負整數，各段都可以超過 9，達到 10 時照常遞增。例子包括 `9.2.3 → 10.0.0`、`0.9.12 → 0.10.0`、`0.8.9 → 0.8.10`。
+
+### 8.1 日常提交
+
+- **日常提交可升 PATCH。** 修正錯誤、補齊基本功能、增加小型操作或調整介面時，每次提交可把受影響元件的 PATCH 加一。例如 `0.8.3 → 0.8.4 → 0.8.5`。
+- 同一筆提交包含多項改動時，該元件只加一次。只改開發文件、註解或測試的提交可沿用原版號。
+- 使用者可感知的變更累積在各自 `CHANGELOG.md` 的 `[Unreleased]`。ui-kit 的變更記在 Dev-Toolbox 根目錄的 `CHANGELOG.md`。開發版號可先更新，正式發布時再建立 tag。
+
+### 8.2 重大更新
+
+- **重大功能或工作流程改版才升 MINOR。** 中間一段加一，PATCH 歸零，例如 `0.8.12 → 0.9.0`。以功能與流程的影響判斷時機。
+- **MAJOR 保留給明確的大版發布。** 例如正式定版 `1.0.0`，或穩定版的既有 CLI、API、`tool.json` 格式或資料有不相容的變更。
+
+### 8.3 Hub、工具與 ui-kit 各自發布
+
+- 各工具在自己的 repository 累積變更並獨立發布。Hub 的 submodule 一律指向工具 tag 對應的提交。多個工具的 pin 更新可累積到同一個 Hub 發布批次。
+- Hub 的版號隨自身變更或工具 pin 更新調整。工具自行發布時，Hub 可在後續提交再納入。
+- ui-kit 使用自己的版本。更新共用元件版號時，修改正本 `ui-kit.css` 第一行的版本，並用 `Sync-UiKit.ps1` 同步檔案與各工具 `tool.json` 的 `uiKit` 欄位。工具可在自己的下一次發布一併交付同步結果。
+
+### 8.4 發布步驟
+
+1. 例行發布可直接採用本批最後的 PATCH 開發版號。重大更新依第 8.2 節調整該 Hub 或工具的 `tool.json` 的 `version`。
+2. 將 `[Unreleased]` 中本次要發布的項目移入對應版號與日期的區段。
+3. 驗證後在發布提交上建立同版號的 `vX.Y.Z` tag，確認 manifest、CHANGELOG 和 tag 一致。已發布的版號與 tag 保留原樣。
+
 - 授權：MIT。

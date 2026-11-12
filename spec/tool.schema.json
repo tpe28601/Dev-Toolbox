@@ -58,6 +58,9 @@
     "uiKitTarget": { "type": "string", "description": "ui-kit.css 放置目錄（相對於工具根目錄），預設 ui；靜態檔不在 ui\\ 的工具才需要填" }
   },
   "allOf": [
-    { "if": { "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["web", "cli", "dataDir"] } }
+    {
+      "if": { "properties": { "kind": { "const": "tool" } } },
+      "then": { "anyOf": [ { "required": ["web"] }, { "required": ["cli"] } ] }
+    }
   ]
 }

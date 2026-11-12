@@ -1,6 +1,6 @@
 # Dev-Toolbox
 
-把四個 Windows 開發工具整合成一個入口，同時保留每個工具單獨使用的能力。
+把五個 Windows 開發工具整合成一個入口，同時保留每個工具單獨使用的能力。
 
 | 工具 | 用途 | 語言 |
 | --- | --- | --- |
@@ -8,6 +8,7 @@
 | [Opencode-Cfg-Manager](https://github.com/tpe28601/cfg-manager) | opencode 設定打包、還原、部署 | PowerShell |
 | [Key-Manager](https://github.com/tpe28601/key-manager) | SSH、GPG 金鑰管理 | Python |
 | [Build Runner](https://github.com/tpe28601/build-runner) | 本機建置、Recipe、Log、產出物與排程 | Python |
+| [HLK Viewer](https://github.com/tpe28601/hlk-viewer) | Windows HLK 測試結果檢視與報表匯出（tkinter GUI，CLI-only 納入） | Python |
 
 ## 安裝
 
@@ -19,7 +20,7 @@ Setup.bat
 
 需要：Windows 10/11、Git for Windows、Windows PowerShell 5.1 以上。
 
-四個工具都透過 Git submodule 安裝。若已 clone 過 Dev-Toolbox，請執行 `git submodule update --init --recursive`。Hub 會依各工具的 `tool.json` 自動載入。
+五個工具都透過 Git submodule 安裝。若已 clone 過 Dev-Toolbox，請執行 `git submodule update --init --recursive`。Hub 會依各工具的 `tool.json` 自動載入。
 
 ## 使用
 
@@ -41,7 +42,7 @@ Web Hub（`hub/Hub-Web.ps1`，port 8700）可在瀏覽器中啟動／停止各�
 spec/        工具規格（TOOL-SPEC.md）與 tool.json 的 JSON Schema
 ui-kit/      共用樣式正本：ui-kit.css、cli-kit.ps1、Sync-UiKit.ps1
 hub/         Hub 本身
-tools/       四個工具（Git submodule）
+tools/       五個工具（Git submodule）
 ```
 
 ## 開發規則
