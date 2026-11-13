@@ -61,7 +61,7 @@
 | 工具 | 預設 port |
 | --- | --- |
 | Hub | 8700 |
-| Opencode-Cfg-Manager | 8712 |
+| Agents-Cfg-Manager | 8712 |
 | Key-Manager | 8730 |
 | Build Runner | 8740 |
 | Git-Ref-Manager | 8756 |

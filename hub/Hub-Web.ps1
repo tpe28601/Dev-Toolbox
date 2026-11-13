@@ -375,7 +375,7 @@ function Cut-Text([string]$s, [int]$Max) {
 function Get-Activity([int]$Limit) {
     # 聚合各工具真實工作歷史：直接讀 dataDir 的 history.jsonl（工具沒啟動也查得到）。
     # 只列有操作記錄概念的工具：Build Runner（建置）、Git Ref Manager（同步等 job）、
-    # Opencode Cfg Manager（打包／解開／複製）。歸一化成 {tool,title,detail,time,status}。
+    # Agents Cfg Manager（打包／解開／複製）。歸一化成 {tool,title,detail,time,status}。
     $items = @()
     if (-not $env:LOCALAPPDATA) { return [pscustomobject]@{ ok = $true; result = @() } }
     $base = Join-Path $env:LOCALAPPDATA 'DevToolbox'
@@ -439,8 +439,8 @@ function Get-Activity([int]$Limit) {
             time = (ConvertTo-TimeMs ([string]$h.endedAt)); status = $st }
     }
 
-    # Opencode Cfg Manager：欄位自帶 status，檔案最新在前 → 讀檔頭
-    foreach ($h in @(Read-JsonlTail (Join-Path $base 'opencode-cfg-manager\history.jsonl') 30 -Head)) {
+    # Agents Cfg Manager：欄位自帶 status，檔案最新在前 → 讀檔頭
+    foreach ($h in @(Read-JsonlTail (Join-Path $base 'agents-cfg-manager\history.jsonl') 30 -Head)) {
         $actCn = switch ($h.action) {
             'pack'   { '打包設定檔' }
             'unpack' { '解開設定檔' }
@@ -457,7 +457,7 @@ function Get-Activity([int]$Limit) {
         }
         $st = 'ok'
         if ($h.status -match 'fail|error') { $st = 'fail' } elseif ($h.status -match 'warn|partial') { $st = 'warn' }
-        $items += [pscustomobject]@{ tool = 'opencode-cfg-manager'; title = (Cut-Text $title 90); detail = ($det -join '，')
+        $items += [pscustomobject]@{ tool = 'agents-cfg-manager'; title = (Cut-Text $title 90); detail = ($det -join '，')
             time = (ConvertTo-TimeMs ([string]$h.time)); status = $st }
     }
 

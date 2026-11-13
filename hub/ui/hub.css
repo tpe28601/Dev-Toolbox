@@ -49,6 +49,10 @@
   color: var(--tb-muted); padding: var(--tb-space-2) var(--tb-space-2) 2px; }
 @media (max-width: 960px) { .hub-side__group { display: none; } }   /* 圖標 rail 不顯示分組標題 */
 .hub-seg-wrap { flex-wrap: wrap; }
+/* 工具名稱較長時最多換兩行，不截成「…」；完整名稱另放在 title */
+.hub-nav__tool { padding-top: 6px; padding-bottom: 6px; }
+.hub-nav__tool .tb-nav__label { white-space: normal; overflow-wrap: anywhere; line-height: 1.3;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 
 /* ---------- 總覽（dashboard）：狀態卡＋最近的工作 ---------- */
 #pageDash .tb-content { padding: var(--tb-space-2) var(--tb-space-1) var(--tb-space-5); overflow: auto; }

@@ -6,7 +6,7 @@
 
 ```bat
 git submodule add https://github.com/tpe28601/git-ref-manager.git tools/Git-Ref-Manager
-git submodule add https://github.com/tpe28601/cfg-manager.git tools/Opencode-Cfg-Manager
+git submodule add https://github.com/tpe28601/cfg-manager.git tools/Agents-Cfg-Manager
 git submodule add https://github.com/tpe28601/key-manager.git tools/Key-Manager
 git submodule add https://github.com/tpe28601/build-runner.git tools/Build-Runner
 cd tools/Git-Ref-Manager && git checkout v1.1.1 && cd ../..
