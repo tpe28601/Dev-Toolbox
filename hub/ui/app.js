@@ -20,7 +20,7 @@ const els = {
 };
 
 const TOOL_ICONS = {
-  'git-ref-manager': 'git-branch', 'opencode-cfg-manager': 'package', 'key-manager': 'key',
+  'git-ref-manager': 'git-branch', 'agents-cfg-manager': 'package', 'key-manager': 'key',
   'build-runner': 'terminal', 'hlk-viewer': 'shield', 'script-editor': 'file-code',
   'token-meter': 'layout-dashboard'
 };
@@ -42,6 +42,9 @@ const state = {
   hubClosed: false,
   settings: { pythonPath: '' },
   hub: null,         // /api/health 回傳（版本／port/uptime），供總覽摘要列
+  hubAt: 0,          // 取得 state.hub 的時間（performance.now），讓 uptime 在兩次輪詢之間逐秒前進
+  loaded: false,     // 第一次 /api/tools 成功前為 false：總覽顯示「讀取中…」而不是 0 / 0
+  uptimeTimer: null,
 };
 
 function load(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
@@ -300,16 +303,27 @@ function fmtUptime(sec) {
   return h ? `${h} 小時 ${m} 分` : (m ? `${m} 分 ${sec % 60} 秒` : `${sec} 秒`);
 }
 
+// 摘要列：uptime 以最後一次 /api/health 的值加上本機經過時間推算，每秒更新
+function renderDashSummary() {
+  if (state.hubClosed) return;
+  if (!state.loaded) { els.dashSummary.textContent = '讀取中…'; return; }
+  const run = state.tools.filter((t) => t.running).length;
+  const parts = [`${run} / ${state.tools.length} 個工具執行中`];
+  if (state.hub) {
+    const sec = (+state.hub.uptimeSec || 0) + (performance.now() - state.hubAt) / 1000;
+    parts.push(`Hub 已運行 ${fmtUptime(sec)}`);
+  }
+  els.dashSummary.textContent = parts.join('　·　');
+}
+
 function renderDash() {
   if (state.hubClosed) {
     els.pageDash.classList.add('is-closed');
     els.dashSummary.textContent = 'Hub 已關閉，可以關閉此分頁。';
     return;
   }
-  const run = state.tools.filter((t) => t.running).length;
-  const parts = [`${run} / ${state.tools.length} 個工具執行中`];
-  if (state.hub) parts.push(`Hub 已運行 ${fmtUptime(state.hub.uptimeSec)}`);
-  els.dashSummary.textContent = parts.join('　·　');
+  renderDashSummary();
+  if (!state.loaded) return;   // 清單還沒回來：保留「讀取中…」，不畫空卡片
 
   // 卡片是整組重建的：資料（含 busy／activity）沒變就不重建，
   // 否則 5 秒輪詢會重置過渡動畫，也容易打斷正在懸浮操作按鈕的滑鼠。
@@ -487,6 +501,7 @@ async function refresh() {
     const data = await apiGet('/api/tools');
     if (state.hubClosed) return;
     state.tools = data.tools || [];
+    state.loaded = true;
     if (!state.selected || !toolById(state.selected)) {
       state.selected = state.tools.length ? state.tools[0].id : null;
       if (state.page === 'tool') setUrl();
@@ -495,6 +510,7 @@ async function refresh() {
       const [hb, act] = await Promise.allSettled([apiGet('/api/health'), apiGet('/api/activity?limit=12')]);
       if (state.hubClosed) return;
       state.hub = hb.status === 'fulfilled' ? hb.value : null;
+      state.hubAt = performance.now();
       state.activity = act.status === 'fulfilled' ? act.value : null;
     }
     state.failCount = 0;
@@ -524,6 +540,7 @@ async function shutdownHub() {
   }
   state.hubClosed = true;
   clearInterval(state.pollTimer);
+  clearInterval(state.uptimeTimer);
   state.tools = [];
   els.dashRefresh.disabled = true;
   els.navSettings.classList.add('tb-hidden');
@@ -733,6 +750,11 @@ function startPolling() {
   if (state.hubClosed) return;
   if (state.pollTimer) clearInterval(state.pollTimer);
   state.pollTimer = setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+  if (!state.uptimeTimer) {
+    state.uptimeTimer = setInterval(() => {
+      if (!document.hidden && state.page === 'dash' && !state.hubClosed) renderDashSummary();
+    }, 1000);
+  }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 

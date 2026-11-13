@@ -1,11 +1,11 @@
 # Dev-Toolbox
 
-把五個 Windows 開發工具整合成一個入口，同時保留每個工具單獨使用的能力。
+把 Windows 開發工具整合成一個入口，同時保留每個工具單獨使用的能力。
 
 | 工具 | 用途 | 語言 |
 | --- | --- | --- |
 | [Git-Ref-Manager](https://github.com/tpe28601/git-ref-manager) | Git ref、origin、worktree 管理 | PowerShell |
-| [Opencode-Cfg-Manager](https://github.com/tpe28601/cfg-manager) | opencode 設定打包、還原、部署 | PowerShell |
+| [Agents Cfg Manager](https://github.com/tpe28601/cfg-manager) | AI agent 設定檔打包、還原、部署 | PowerShell |
 | [Key-Manager](https://github.com/tpe28601/key-manager) | SSH、GPG 金鑰管理 | Python |
 | [Build Runner](https://github.com/tpe28601/build-runner) | 本機建置、Recipe、Log、產出物與排程 | Python |
 | [HLK Viewer](https://github.com/tpe28601/hlk-viewer) | Windows HLK 測試結果檢視與報表匯出（tkinter GUI，CLI-only 納入） | Python |
@@ -13,14 +13,16 @@
 ## 安裝
 
 ```bat
-git clone --recurse-submodules https://github.com/tpe28601/Dev-Toolbox.git
+git clone https://github.com/tpe28601/Dev-Toolbox.git
 cd Dev-Toolbox
 Setup.bat
 ```
 
 需要：Windows 10/11、Git for Windows、Windows PowerShell 5.1 以上。
 
-五個工具都透過 Git submodule 安裝。若已 clone 過 Dev-Toolbox，請執行 `git submodule update --init --recursive`。Hub 會依各工具的 `tool.json` 自動載入。
+`Setup.bat` 預設安裝公開工具，略過 private 的 HLK Viewer 和 Script Editor。已有 Dev-Toolbox clone 時，在該資料夾執行新版 `Setup.bat` 即可繼續安裝。Hub 會依各工具的 `tool.json` 自動載入。
+
+有 private repo 的 GitHub 存取權限時，可執行 `Setup.bat --include-private` 安裝所有工具。只安裝公開工具時，最後的環境檢查會顯示 private 工具尚未初始化。
 
 ## 使用
 
@@ -42,7 +44,7 @@ Web Hub（`hub/Hub-Web.ps1`，port 8700）可在瀏覽器中啟動／停止各�
 spec/        工具規格（TOOL-SPEC.md）與 tool.json 的 JSON Schema
 ui-kit/      共用樣式正本：ui-kit.css、cli-kit.ps1、Sync-UiKit.ps1
 hub/         Hub 本身
-tools/       五個工具（Git submodule）
+tools/       工具（Git submodule）
 ```
 
 ## 開發規則

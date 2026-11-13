@@ -2,6 +2,17 @@
 
 格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版本遵循 SemVer。
 
+## [Unreleased]
+
+### 變更
+- Opencode Cfg Manager 改名為 Agents Cfg Manager（v1.2.0）：子模組資料夾改為 `tools/Agents-Cfg-Manager`，子模組名稱同步更新，GitHub repo（`tpe28601/cfg-manager`）不變；工具 id 改為 `agents-cfg-manager`，Hub 的圖示對應與「最近的工作」讀取路徑一併更新。舊資料夾 `%LOCALAPPDATA%\DevToolbox\opencode-cfg-manager` 會在工具第一次啟動時複製到 `agents-cfg-manager`（舊資料夾保留）。
+- Build Runner 的工具說明改為中文。
+
+### 修正
+- 總覽的「Hub 已運行」改為每秒更新，不再只在輪詢時跳動。
+- 總覽在工具清單載入前顯示「讀取中…」，不再先閃「0 / 0 個工具」。
+- 側欄工具名稱過長時最多換兩行，不再截成「…」。
+
 ## [0.4.0] - 2026-11-12
 
 ### 新增
