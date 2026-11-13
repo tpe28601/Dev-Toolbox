@@ -12,12 +12,14 @@ param(
     [Parameter(Position = 1)][string]$ToolId,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest,
     [switch]$Version,
-    [switch]$NoColor
+    [switch]$NoColor,
+    [string]$InstallationRoot
 )
 
 $ErrorActionPreference = 'Stop'
 $HubRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $HubRoot 'ui-kit\cli-kit.ps1')
+. (Join-Path $PSScriptRoot 'Tool-Updates.ps1')
 if ($NoColor) { Set-TbNoColor $true }
 
 function Read-JsonFile([string]$Path) {
@@ -34,12 +36,25 @@ function Test-VenvUsable([string]$VenvDir) {
     return (Test-Path -LiteralPath (Join-Path $hit.Matches[0].Groups[1].Value 'python.exe'))
 }
 
-function Get-HubSettingsPython {
-    # 與 Hub-Web.ps1 共用 settings.json（DEVTOOLBOX_DATA 或 LOCALAPPDATA\DevToolbox\dev-toolbox-hub）
+function Get-HubDataRoot {
     $base = Join-Path $env:TEMP 'DevToolbox\dev-toolbox-hub'
     if ($env:LOCALAPPDATA) { $base = Join-Path $env:LOCALAPPDATA 'DevToolbox\dev-toolbox-hub' }
     if ($env:DEVTOOLBOX_DATA) { $base = Join-Path $env:DEVTOOLBOX_DATA 'dev-toolbox-hub' }
-    $f = Join-Path $base 'settings.json'
+    return $base
+}
+
+if (-not $InstallationRoot) { $InstallationRoot = $HubRoot }
+$ToolUpdateStore = Get-ToolUpdateStore $InstallationRoot (Get-HubDataRoot)
+$hubVersion = (Read-JsonFile (Join-Path $HubRoot 'tool.json')).version
+$activeHubDir = Resolve-ToolUpdateDir $ToolUpdateStore 'dev-toolbox' $hubVersion $HubRoot
+if ($activeHubDir -ne $HubRoot) {
+    $PSBoundParameters['InstallationRoot'] = $InstallationRoot
+    & (Join-Path $activeHubDir 'hub\hub.ps1') @PSBoundParameters
+    exit $LASTEXITCODE
+}
+
+function Get-HubSettingsPython {
+    $f = Join-Path (Get-HubDataRoot) 'settings.json'
     if (-not (Test-Path -LiteralPath $f)) { return $null }
     try {
         $p = [string](Read-JsonFile $f).pythonPath
@@ -71,7 +86,7 @@ function Get-UiKitVersion([string]$CssPath) {
 
 function Get-Tools {
     $list = @()
-    $toolsDir = Join-Path $HubRoot 'tools'
+    $toolsDir = Join-Path $InstallationRoot 'tools'
     foreach ($dir in @(Get-ChildItem -LiteralPath $toolsDir -Directory -ErrorAction SilentlyContinue)) {
         $manifest = Join-Path $dir.FullName 'tool.json'
         if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
@@ -80,7 +95,9 @@ function Get-Tools {
         }
         try {
             $m = Read-JsonFile $manifest
-            $list += [pscustomobject]@{ Id = [string]$m.id; Name = [string]$m.name; Version = [string]$m.version; Installed = $true; Dir = $dir.FullName; Manifest = $m; Error = $null }
+            $activeDir = Resolve-ToolUpdateDir $ToolUpdateStore $m.id $m.version $dir.FullName
+            if ($activeDir -ne $dir.FullName) { $m = Read-JsonFile (Join-Path $activeDir 'tool.json') }
+            $list += [pscustomobject]@{ Id = [string]$m.id; Name = [string]$m.name; Version = [string]$m.version; Installed = $true; Dir = $activeDir; Manifest = $m; Error = $null }
         } catch {
             $list += [pscustomobject]@{ Id = $dir.Name; Name = $dir.Name; Version = ''; Installed = $false; Dir = $dir.FullName; Manifest = $null; Error = "tool.json 無法解析：$($_.Exception.Message)" }
         }
@@ -109,7 +126,7 @@ function Invoke-Doctor {
 
     Write-TbSection 'Submodule'
     if (Get-Command git -ErrorAction SilentlyContinue) {
-        $st = & git -C $HubRoot submodule status 2>&1
+        $st = & git -C $InstallationRoot submodule status 2>&1
         if ($LASTEXITCODE -ne 0) { Write-TbWarn '無法讀取 submodule 狀態（這個資料夾可能還不是 git repo）' }
         foreach ($line in @($st)) {
             $s = [string]$line
@@ -178,7 +195,7 @@ switch ($Command) {
     'doctor' { $code = Invoke-Doctor }
     'web'    {
         # Web 主控台：直接前景執行，Ctrl+C 停止（工具服務會因 -ParentPid 跟著退）
-        & (Join-Path $PSScriptRoot 'Hub-Web.ps1') -OpenBrowser
+        & (Join-Path $PSScriptRoot 'Hub-Web.ps1') -OpenBrowser -InstallationRoot $InstallationRoot
         $code = $LASTEXITCODE
     }
     'run'    {
@@ -196,7 +213,7 @@ switch ($Command) {
         $items += @{ Key = '0'; Label = '離開' }
         $choice = Show-TbMenu '選擇工具' $items
         if ($choice -eq 'd') { $code = Invoke-Doctor }
-        elseif ($choice -eq 'w') { & (Join-Path $PSScriptRoot 'Hub-Web.ps1') -OpenBrowser }
+        elseif ($choice -eq 'w') { & (Join-Path $PSScriptRoot 'Hub-Web.ps1') -OpenBrowser -InstallationRoot $InstallationRoot }
         elseif ($choice -and $choice -ne '0') { Invoke-Run $tools[[int]$choice - 1].Id @(); $code = $script:RunCode }
     }
     default  { Write-TbErr "未知的指令：$Command（可用：list、doctor、web、run）"; $code = $script:TbExit.BadArgs }

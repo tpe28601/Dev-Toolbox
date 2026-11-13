@@ -12,7 +12,8 @@ param(
     [int]$Port = 8700,
     [switch]$OpenBrowser,
     [switch]$Force,
-    [string]$DataDir
+    [string]$DataDir,
+    [string]$InstallationRoot
 )
 $script:PortExplicit = $PSBoundParameters.ContainsKey('Port')
 
@@ -27,6 +28,7 @@ function Read-JsonFile([string]$Path) {
 }
 
 $script:HubManifest = Read-JsonFile (Join-Path $HubRoot 'tool.json')
+. (Join-Path $PSScriptRoot 'Tool-Updates.ps1')
 
 # ---------------- 資料夾（TOOL-SPEC 第 6 節：--data-dir > DEVTOOLBOX_DATA > LOCALAPPDATA） ----------------
 function Resolve-HubDataDir([string]$Override) {
@@ -36,6 +38,16 @@ function Resolve-HubDataDir([string]$Override) {
     return (Join-Path $env:TEMP 'DevToolbox\dev-toolbox-hub')
 }
 $script:DataDir = Resolve-HubDataDir $DataDir
+if (-not $InstallationRoot) { $InstallationRoot = $HubRoot }
+$script:ToolUpdateStore = Get-ToolUpdateStore $InstallationRoot (Resolve-HubDataDir '')
+$script:ToolUpdateOffers = @{}
+$activeHubDir = Resolve-ToolUpdateDir $ToolUpdateStore 'dev-toolbox' $script:HubManifest.version $HubRoot
+if ($activeHubDir -ne $HubRoot) {
+    $launch = @{ InstallationRoot = $InstallationRoot; DataDir = $script:DataDir; OpenBrowser = $OpenBrowser; Force = $Force }
+    if ($script:PortExplicit) { $launch.Port = $Port }
+    & (Join-Path $activeHubDir 'hub\Hub-Web.ps1') @launch
+    return
+}
 foreach ($d in @($script:DataDir, (Join-Path $script:DataDir 'jobs'))) {
     if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
 }
@@ -43,7 +55,7 @@ foreach ($d in @($script:DataDir, (Join-Path $script:DataDir 'jobs'))) {
 # ---------------- 工具清單（讀 tools\*\tool.json，與 hub.ps1 同邏輯） ----------------
 function Get-Tools {
     $list = @()
-    $toolsDir = Join-Path $HubRoot 'tools'
+    $toolsDir = Join-Path $InstallationRoot 'tools'
     foreach ($dir in @(Get-ChildItem -LiteralPath $toolsDir -Directory -ErrorAction SilentlyContinue)) {
         $manifest = Join-Path $dir.FullName 'tool.json'
         if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
@@ -52,7 +64,9 @@ function Get-Tools {
         }
         try {
             $m = Read-JsonFile $manifest
-            $list += [pscustomobject]@{ Id = [string]$m.id; Name = [string]$m.name; Version = [string]$m.version; Installed = $true; Dir = $dir.FullName; Manifest = $m; Error = $null }
+            $activeDir = Resolve-ToolUpdateDir $ToolUpdateStore $m.id $m.version $dir.FullName
+            if ($activeDir -ne $dir.FullName) { $m = Read-JsonFile (Join-Path $activeDir 'tool.json') }
+            $list += [pscustomobject]@{ Id = [string]$m.id; Name = [string]$m.name; Version = [string]$m.version; Installed = $true; Dir = $activeDir; Manifest = $m; Error = $null }
         } catch {
             $list += [pscustomobject]@{ Id = $dir.Name; Name = $dir.Name; Version = ''; Installed = $false; Dir = $dir.FullName; Manifest = $null; Error = "tool.json 無法解析：$($_.Exception.Message)" }
         }
@@ -228,7 +242,7 @@ function Start-ToolService([string]$Id) {
     switch ($kind) {
         'powershell' {
             $exe = 'powershell.exe'
-            $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $entry, '-ParentPid', $PID, '-HubOrigin', $hubOrigin)
+            $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $entry), '-ParentPid', $PID, '-HubOrigin', $hubOrigin)
         }
         'python' {
             $exe = Resolve-PythonExe $t.Dir
@@ -313,7 +327,7 @@ function Get-RuntimeDetail($t) {
     $kind = [string]$t.Manifest.runtime.kind
     if ($kind -eq 'powershell') { return "Windows PowerShell $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)" }
     if ($kind -ne 'python') { return $kind }
-    $key = "cand|$($t.Id)|$((Get-HubSettings).pythonPath)"
+    $key = "cand|$($t.Dir)|$((Get-HubSettings).pythonPath)"
     if (-not $script:RuntimeDetailCache.ContainsKey($key)) {
         $script:RuntimeDetailCache[$key] = @(Get-PythonCandidates $t.Dir | Where-Object { $_.found }) | Select-Object -First 1
     }
@@ -475,6 +489,7 @@ function Get-ToolsView {
             name      = $t.Name
             version   = $t.Version
             installed = $t.Installed
+            canUpdate = $t.Installed -and $script:ToolReleaseRepos.ContainsKey($t.Id)
             error     = $t.Error
             runtime   = if ($t.Installed) { [string]$t.Manifest.runtime.kind } else { '' }
             runtimeDetail = if ($t.Installed) { Get-RuntimeDetail $t } else { '' }
@@ -604,6 +619,81 @@ function Test-RequestAllowed($req) {
 }
 
 # ---------------- API 路由 ----------------
+function Get-UpdatableTool([string]$Id) {
+    if ($Id -ceq 'dev-toolbox') {
+        return [pscustomobject]@{ Id = $Id; Version = [string]$script:HubManifest.version; Dir = $HubRoot }
+    }
+    $tool = @(Get-Tools | Where-Object { $_.Installed -and $_.Id -ceq $Id })
+    if ($tool.Count -ne 1 -or -not $script:ToolReleaseRepos.ContainsKey($Id)) {
+        throw @{ code = 'NO_UPDATE_SOURCE'; message = '找不到可更新的工具。' }
+    }
+    return $tool[0]
+}
+
+function Invoke-HubUpdate($Tool, $Offer) {
+    $state = @{ process = $null; url = $null }
+    $result = Install-ToolRelease $ToolUpdateStore $Tool $Offer {} {
+        $dir = Resolve-ToolUpdateDir $ToolUpdateStore $Tool.Id $Tool.Version $Tool.Dir
+        $entry = Join-Path $dir 'hub\Hub-Web.ps1'
+        $log = Join-Path $script:DataDir ('jobs\hub-update-' + [guid]::NewGuid().ToString('N'))
+        $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $entry),
+            '-Force', '-InstallationRoot', ('"{0}"' -f $InstallationRoot), '-DataDir', ('"{0}"' -f $script:DataDir))
+        $state.process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -WorkingDirectory $dir `
+            -WindowStyle Hidden -PassThru -RedirectStandardOutput "$log.out" -RedirectStandardError "$log.err"
+        $deadline = (Get-Date).AddSeconds(25)
+        while ((Get-Date) -lt $deadline -and -not $state.process.HasExited) {
+            $line = Get-Content -LiteralPath "$log.out" -TotalCount 1 -ErrorAction SilentlyContinue
+            if ($line -match '^READY (http://127\.0\.0\.1:\d+)$') {
+                $url = $Matches[1]
+                $health = Invoke-ToolHttp "$url/api/health" 'GET' 1000
+                if ($health.ok -and $health.id -ceq $Tool.Id -and $health.version -ceq $Offer.version -and $health.pid -eq $state.process.Id) {
+                    $state.url = $url
+                    return
+                }
+            }
+            Start-Sleep -Milliseconds 250
+        }
+        throw "新版 Hub 啟動失敗，請查看 $log.err"
+    } {
+        if ($state.process -and -not $state.process.HasExited) { Stop-Process -Id $state.process.Id -Force }
+    }
+    $script:Shutdown = $true
+    return @{ version = $result.version; url = $state.url }
+}
+
+function Invoke-ToolUpdate($Tool, $Offer, [bool]$RestartConfirmed) {
+    $id = $Tool.Id
+    $running = Get-ToolStatus $Tool
+    if ($running -and -not $running.managed) { throw '請先關閉在 Hub 外啟動的工具，再重新更新。' }
+    if ($running -and -not $RestartConfirmed) { throw '工具已開始執行，請重新檢查更新並確認重新啟動。' }
+    $state = @{ stopped = $false }
+    return (Install-ToolRelease $ToolUpdateStore $Tool $Offer {
+        if ($running) {
+            $proc = $script:ToolProcs[$id].Proc
+            # Let update fail if the tool refuses to stop, without force-killing active work.
+            [void](Invoke-ToolHttp "$($running.url)/api/shutdown" 'POST' 1500)
+            if (-not $proc.WaitForExit(5000)) { throw '工具尚未停止，更新未套用。' }
+            $script:ToolProcs.Remove($id)
+            $state.stopped = $true
+        }
+    } {
+        if ($state.stopped) {
+            $started = Start-ToolService $id
+            $health = Invoke-ToolHttp "$($started.url)/api/health" 'GET' 2000
+            if (-not $health.ok -or $health.id -cne $id) {
+                $proc = $script:ToolProcs[$id].Proc
+                Stop-ToolService $id | Out-Null
+                if (-not $proc.WaitForExit(2000)) {
+                    & taskkill.exe /T /F /PID $proc.Id 2>&1 | Out-Null
+                }
+                throw '新版未通過健康檢查。'
+            }
+        }
+    } {
+        if ($state.stopped) { Start-ToolService $id | Out-Null }
+    })
+}
+
 function Route-Request($req, $ctx) {
     $path = ($req.RawUrl -split '\?')[0]
     $method = ([string]$req.Method).ToUpperInvariant()
@@ -670,6 +760,37 @@ function Route-Request($req, $ctx) {
 
     # POST
     switch ($path) {
+        '/api/tools/update/check' {
+            $b = Read-JsonBody $req
+            $t = Get-UpdatableTool ([string]$b.id)
+            $script:ToolUpdateOffers.Remove($t.Id)
+            $offer = Get-ToolRelease $t $script:HubManifest.version
+            $update = $null
+            if ($offer) {
+                $script:ToolUpdateOffers[$t.Id] = @{ offer = $offer; current = $t.Version; expires = (Get-Date).AddMinutes(10) }
+                $update = @{ version = $offer.version; notes = $offer.notes }
+            }
+            Send-JsonRaw $ctx @{ ok = $true; update = $update }
+            return
+        }
+        '/api/tools/update/apply' {
+            $b = Read-JsonBody $req
+            $t = Get-UpdatableTool ([string]$b.id)
+            $checked = $script:ToolUpdateOffers[$t.Id]
+            if (-not $checked -or $checked.current -cne $t.Version -or
+                $checked.offer.version -cne [string]$b.version -or $checked.expires -lt (Get-Date)) {
+                throw @{ code = 'UPDATE_EXPIRED'; message = '請重新檢查更新後再安裝。' }
+            }
+            $script:ToolUpdateOffers.Remove($t.Id)
+            if ($t.Id -eq 'dev-toolbox') {
+                if ($b.restart -isnot [bool] -or -not $b.restart) { throw '請確認重新啟動 Hub。' }
+                $result = Invoke-HubUpdate $t $checked.offer
+            } else {
+                $result = Invoke-ToolUpdate $t $checked.offer ($b.restart -is [bool] -and $b.restart)
+            }
+            Send-JsonRaw $ctx @{ ok = $true; result = $result }
+            return
+        }
         '/api/tools/start' {
             $b = Read-JsonBody $req
             $id = [string]$b.id

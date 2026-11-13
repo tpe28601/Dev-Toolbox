@@ -64,6 +64,7 @@
 .hub-tool-card__name { flex: 1 1 auto; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hub-tool-card__state { font-size: 20px; font-weight: 700; line-height: 1.25; }
 .hub-tool-card__sub { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+#confirmText { max-height: 45vh; overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
 /* 快速操作小钮：平時隱藏，懸浮／鍵盤聚焦才浮現；啟動中/停止中（is-busy-acts）常駐顯示 spinner。
    用 opacity＋pointer-events 而非 visibility：visibility:hidden 會讓钮無法被 Tab 聚焦，
    focus-within 就永遠不會觸發（鍵盤操作失效）。 */

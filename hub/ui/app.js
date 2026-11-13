@@ -9,6 +9,7 @@ const els = {
   dashGrid: $('dashGrid'), dashSummary: $('dashSummary'), dashRefresh: $('dashRefresh'),
   dashActs: $('dashActs'), dashShutdown: $('dashShutdown'),
   toolName: $('toolName'), toolBadge: $('toolBadge'), toolStatus: $('toolStatus'),
+  toolUpdate: $('toolUpdate'), hubUpdate: $('hubUpdate'),
   btnStop: $('btnStop'), btnReload: $('btnReload'), btnPopout: $('btnPopout'),
   frameBox: $('frameBox'), placeholder: $('placeholder'),
   phIcon: $('phIcon'), phTitle: $('phTitle'), phDesc: $('phDesc'), phMeta: $('phMeta'),
@@ -91,12 +92,15 @@ function toast(kind, text, ms = 4200) {
   setTimeout(() => t.remove(), ms);
 }
 
-function confirmDialog(title, text) {
+function confirmDialog(title, text, options = {}) {
+  if (!els.confirmBackdrop.classList.contains('tb-hidden')) return Promise.resolve(false);
   return new Promise((resolve) => {
     const opener = document.activeElement; // 關閉後把焦點還回去
     els.confirmIcon.innerHTML = icon('triangle-alert', { size: 22 });
     els.confirmTitle.textContent = title;
     els.confirmText.textContent = text;
+    els.confirmOk.textContent = options.label || '確定';
+    els.confirmOk.classList.toggle('tb-btn--danger', !options.label);
     els.confirmBackdrop.classList.remove('tb-hidden');
     els.confirmCancel.focus();
     const done = (val) => {
@@ -140,13 +144,17 @@ const BADGE = {
 };
 function stateLabel(t) {
   const s = toolState(t);
-  if (s === 'busy') return state.busy[t.id] === 'start' ? '啟動中…' : '停止中…';
+  if (s === 'busy') return busyLabel(state.busy[t.id]);
   if (s === 'missing') return t.error || '未安裝';
   if (s === 'running') {
     const r = t.running;
     return `v${t.version} · 127.0.0.1:${r.port} · pid ${r.pid}${r.managed ? '' : '（非 Hub 啟動）'}`;
   }
   return t.web ? `v${t.version}` : `v${t.version} · 只有 CLI`;
+}
+
+function busyLabel(action) {
+  return { start: '啟動中…', stop: '停止中…', update: '下載並安裝中…' }[action];
 }
 
 // ---------- 工具 iframe（keep-alive） ----------
@@ -246,6 +254,7 @@ function renderPlaceholder(title, desc, iconName, hint) {
 
 function renderTool() {
   const t = state.selected ? toolById(state.selected) : null;
+  renderUpdateButton(els.toolUpdate, t?.canUpdate ? t : null);
   if (!t) {
     els.toolName.textContent = 'Dev-Toolbox';
     els.toolBadge.className = 'tb-hidden';
@@ -348,12 +357,12 @@ function renderDash() {
     card.appendChild(top);
 
     let stateText = BADGE[s][1];
-    if (s === 'busy') stateText = busy === 'start' ? '啟動中…' : '停止中…';
+    if (s === 'busy') stateText = busyLabel(busy);
     card.appendChild(el('div', 'hub-tool-card__state', stateText));
 
     let sub;
     if (s === 'running') sub = `127.0.0.1:${t.running.port} · v${t.version}${t.running.managed ? '' : ' · 非 Hub 啟動'}`;
-    else if (s === 'busy') sub = busy === 'start' ? '等待 READY' : '正在結束…';
+    else if (s === 'busy') sub = t.version ? `v${t.version}` : '';
     else if (s === 'missing') sub = t.error || '未安裝';
     else sub = [t.runtimeDetail, t.version ? `v${t.version}` : ''].filter(Boolean).join(' · ');
     card.appendChild(el('div', 'tb-muted tb-small hub-tool-card__sub', sub));
@@ -399,7 +408,7 @@ function renderDash() {
 
     if (s !== 'missing') {
       card.addEventListener('click', () => select(t.id));
-      card.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') select(t.id); });
+      card.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target === card) select(t.id); });
     }
     els.dashGrid.appendChild(card);
   }
@@ -462,6 +471,7 @@ function renderAll() {
   els.pageDash.classList.toggle('tb-hidden', state.page !== 'dash');
   renderNav();
   if (state.page === 'tool') renderTool();
+  if (state.page === 'settings') renderUpdateButton(els.hubUpdate, hubUpdateTarget());
   if (state.page === 'dash') renderDash();
 }
 
@@ -579,6 +589,73 @@ async function stopTool(id) {
   } finally {
     delete state.busy[id];
     await refresh();
+  }
+}
+
+const updateChecks = new Map();
+
+function hubUpdateTarget() {
+  return state.hub?.version ? { id: 'dev-toolbox', name: 'Dev-Toolbox Hub', version: state.hub.version } : null;
+}
+
+function renderUpdateButton(button, tool) {
+  let check = tool && updateChecks.get(tool.id);
+  if (tool && (!check || check.current !== tool.version || (!check.pending && check.expires < Date.now() && !state.busy[tool.id]))) {
+    check = { current: tool.version, pending: true };
+    updateChecks.set(tool.id, check);
+    apiPost('/api/tools/update/check', { id: tool.id }).then(({ update }) => {
+      check.offer = update;
+      check.expires = Date.now() + (update ? 8 : 5) * 60000;
+    }).catch(() => {
+      check.expires = Date.now() + 60000;
+    }).finally(() => {
+      check.pending = false;
+      renderAll();
+    });
+  }
+  const offer = check?.offer;
+  button.classList.toggle('tb-hidden', !offer);
+  button.disabled = !offer || Boolean(tool && state.busy[tool.id]);
+  button.textContent = offer ? (button.disabled ? '下載並安裝中…' : `下載更新 v${offer.version}`) : '';
+}
+
+async function applyUpdate(tool) {
+  if (!tool || state.busy[tool.id] || !els.confirmBackdrop.classList.contains('tb-hidden')) return;
+  const { id, name, version } = tool;
+  const check = updateChecks.get(id);
+  const update = check?.offer;
+  if (!update || check.current !== version || check.expires < Date.now()) { renderAll(); return; }
+  const isHub = id === 'dev-toolbox';
+  const running = tool.running;
+  if (running && !running.managed) {
+    toast('warn', '請先關閉在 Hub 外啟動的工具，再安裝更新。', 7000);
+    return;
+  }
+  const details = [
+    `${name} v${version} → v${update.version}`,
+    isHub ? 'Hub 會重新啟動，由 Hub 啟動的工具也會停止。'
+      : running ? '工具會重新啟動，進行中的工作會被中斷。' : '',
+    update.notes,
+  ].filter(Boolean).join('\n\n');
+  if (!await confirmDialog('下載並安裝更新', details, { label: '下載並安裝' })) return;
+  state.busy[id] = 'update';
+  renderAll();
+  try {
+    const { result } = await apiPost('/api/tools/update/apply', { id, version: update.version, restart: isHub || Boolean(running) });
+    if (isHub) {
+      state.hubClosed = true;
+      location.replace(`${result.url}/?page=settings`);
+      return;
+    }
+    destroyFrame(id);
+    toast('ok', `${name} 已更新至 v${result.version}。`);
+  } catch (err) {
+    toast('danger', `${name} 更新失敗：${err.message}`, 7000);
+  } finally {
+    updateChecks.delete(id);
+    delete state.busy[id];
+    await refresh();
+    renderAll();
   }
 }
 
@@ -764,6 +841,8 @@ els.dashRefresh.addEventListener('click', () => refresh());
 els.dashShutdown.addEventListener('click', shutdownHub);
 els.navSettings.addEventListener('click', (ev) => { ev.preventDefault(); openSettings(); });
 els.phStart.addEventListener('click', () => startTool(state.selected));
+els.toolUpdate.addEventListener('click', () => applyUpdate(toolById(state.selected)));
+els.hubUpdate.addEventListener('click', () => applyUpdate(hubUpdateTarget()));
 els.btnStop.addEventListener('click', () => stopTool(state.selected));
 els.btnReload.addEventListener('click', () => {
   // 工具 frame 與 Hub 跨來源，contentWindow.location.reload() 會拋 SecurityError；

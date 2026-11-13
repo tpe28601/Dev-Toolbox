@@ -2,13 +2,14 @@
 # 只複製檔案、更新 tool.json 的 uiKit 欄位，不會自動 commit。
 # 用法： powershell -NoProfile -ExecutionPolicy Bypass -File ui-kit\Sync-UiKit.ps1 [-DryRun]
 
-param([switch]$DryRun)
+param([switch]$DryRun, [switch]$StandaloneOnly)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $css = Join-Path $PSScriptRoot 'ui-kit.css'
 $cli = Join-Path $PSScriptRoot 'cli-kit.ps1'
 $webFiles = @('ui-kit.css', 'tb-theme.js', 'tb-icons.js', 'tb-dirpicker.js')
+$standaloneIds = @('agents-cfg-manager', 'build-runner', 'git-ref-manager', 'hlk-viewer', 'key-manager')
 
 $first = (Get-Content -LiteralPath $css -TotalCount 1 -Encoding UTF8)
 if ($first -notmatch 'ui-kit (\d+\.\d+\.\d+)') { throw 'ui-kit.css 第一行找不到版本號（格式：/* ui-kit 1.2.3 ... */）' }
@@ -27,8 +28,19 @@ foreach ($dir in @(Get-ChildItem -LiteralPath $toolsDir -Directory -ErrorAction 
     $uiRel = if ($tool.uiKitTarget) { [string]$tool.uiKitTarget -replace '/', '\' } else { 'ui' }
     $uiDir = Join-Path $dir.FullName $uiRel
     $targets = @()
-    foreach ($f in $webFiles) { $targets += @{ From = (Join-Path $PSScriptRoot $f); To = (Join-Path $uiDir $f) } }
-    if ($tool.runtime.kind -eq 'powershell') { $targets += @{ From = $cli; To = (Join-Path $dir.FullName 'cli-kit.ps1') } }
+    if (-not $StandaloneOnly) {
+        foreach ($f in $webFiles) { $targets += @{ From = (Join-Path $PSScriptRoot $f); To = (Join-Path $uiDir $f) } }
+        if ($tool.runtime.kind -eq 'powershell') { $targets += @{ From = $cli; To = (Join-Path $dir.FullName 'cli-kit.ps1') } }
+    }
+    if ($tool.id -in $standaloneIds) {
+        $targets += @{ From = (Join-Path $root 'hub\Tool-Updates.ps1'); To = (Join-Path $dir.FullName 'Tool-Updates.ps1') }
+        $targets += @{ From = (Join-Path $PSScriptRoot 'Standalone-Update.ps1'); To = (Join-Path $dir.FullName 'Standalone-Update.ps1') }
+        $targets += @{ From = (Join-Path $PSScriptRoot 'tb-standalone-update.js'); To = (Join-Path $uiDir 'tb-standalone-update.js') }
+        if ($tool.id -in @('build-runner', 'hlk-viewer', 'key-manager')) {
+            $pythonDir = if ($tool.id -eq 'key-manager') { Join-Path $dir.FullName 'src\key_manager\web' } else { $dir.FullName }
+            $targets += @{ From = (Join-Path $PSScriptRoot 'standalone_update.py'); To = (Join-Path $pythonDir 'standalone_update.py') }
+        }
+    }
     foreach ($t in $targets) {
         if ($DryRun) { Write-Host "[dry-run] $($t.From) -> $($t.To)"; continue }
         $parent = Split-Path $t.To -Parent
@@ -36,7 +48,7 @@ foreach ($dir in @(Get-ChildItem -LiteralPath $toolsDir -Directory -ErrorAction 
         Copy-Item -LiteralPath $t.From -Destination $t.To -Force
         Write-Host "[$($dir.Name)] 已更新 $(Split-Path $t.To -Leaf)"
     }
-    if (-not $DryRun) {
+    if (-not $DryRun -and -not $StandaloneOnly) {
         # 只改 uiKit 一行，保留 tool.json 其餘排版
         $raw = [System.IO.File]::ReadAllText($manifest)
         if ($raw -match '"uiKit"\s*:\s*"[^"]*"') { $raw = $raw -replace '"uiKit"\s*:\s*"[^"]*"', ('"uiKit": "' + $ver + '"') }
