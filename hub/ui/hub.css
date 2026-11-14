@@ -620,3 +620,11 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 .hub-cleanup__foot { display: flex; align-items: center; gap: var(--tb-space-2); flex-wrap: wrap; }
 .hub-cleanup__spacer { flex: 1; }
 @media (max-width: 640px) { .hub-cleanup__row { grid-template-columns: minmax(0, 1fr) auto; } .hub-cleanup__state { grid-column: 1 / -1; } }
+/* 設定 → 更新：Hub 版本列（狀態文字依結果上色）與清理列之間的分隔 */
+.hub-update-ver { margin-left: 6px; font-weight: 500; color: var(--tb-muted); font-variant-numeric: tabular-nums; }
+.hub-update-status { margin-top: 2px; color: var(--tb-muted); }
+.hub-update-status[data-tone="ok"] { color: var(--tb-ok); }
+.hub-update-status[data-tone="warn"] { color: var(--tb-warn); }
+.hub-update-status[data-tone="accent"] { color: var(--tb-accent); font-weight: 600; }
+.hub-advanced__row > .hub-update-actions { flex: 0 0 auto; display: flex; gap: var(--tb-space-2); flex-wrap: wrap; justify-content: flex-end; }
+.hub-cleanup-row { margin-top: var(--tb-space-3); padding-top: var(--tb-space-3); border-top: 1px solid var(--tb-border); }

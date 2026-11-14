@@ -48,6 +48,9 @@ if ($activeHubDir -ne $HubRoot) {
     & (Join-Path $activeHubDir 'hub\Hub-Web.ps1') @launch
     return
 }
+# Hub 從哪裡執行（設定頁「更新」卡片顯示）：Hub 更新資料夾／Git 資料夾／一般安裝資料夾
+$script:HubRunFrom = if ($HubRoot.StartsWith($script:ToolUpdateStore, [StringComparison]::OrdinalIgnoreCase)) { 'store' }
+    elseif (Test-Path -LiteralPath (Join-Path $HubRoot '.git')) { 'git' } else { 'folder' }
 foreach ($d in @($script:DataDir, (Join-Path $script:DataDir 'jobs'))) {
     if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
 }
@@ -990,7 +993,10 @@ function Start-BackgroundRest([string]$Uri, $Headers, [int]$TimeoutSec = 12) {
     [void]$ps.AddScript({
         param($u, $h, $t)
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-        Invoke-RestMethod -Uri $u -Headers $h -TimeoutSec $t
+        # Windows PowerShell 5.1 的 Invoke-RestMethod 會把 JSON 陣列當成「一個」物件送出；
+        # 先存變數再輸出才會展開成每一筆 Release（否則整串被當成一筆，更新檢查永遠找不到新版）
+        $r = Invoke-RestMethod -Uri $u -Headers $h -TimeoutSec $t
+        $r
     }).AddArgument($Uri).AddArgument($Headers).AddArgument($TimeoutSec)
     return @{ PS = $ps; Async = $ps.BeginInvoke() }
 }
@@ -1109,7 +1115,8 @@ function Route-Request($req, $ctx) {
                     ok = $true; id = [string]$script:HubManifest.id; version = [string]$script:HubManifest.version
                     pid = $PID; port = $Port; uptimeSec = [int]((Get-Date) - $script:StartedAt).TotalSeconds
                     # 介面用來判斷伺服器是不是新程式（介面檔更新後、伺服器沒重開時提示）
-                    features = @('cleanup')
+                    features = @('cleanup', 'hub-update-status')
+                    runFrom = $script:HubRunFrom
                 })
                 return
             }
@@ -1299,7 +1306,15 @@ function Route-Request($req, $ctx) {
             $job = Start-BackgroundRest "https://api.github.com/repos/$repo/releases?per_page=100" $headers 12
             $ctx.Deferred = @{ State = @{ Tool = $t; Repo = $repo; Job = $job }; Poll = {
                 param($st, $c)
-                $res = Step-BackgroundRest $st.Job
+                # status：available（有新版）／latest（已是最新）／error（連不到 GitHub 等）；
+                # 連線失敗也回 ok:true，讓介面分得出「已是最新」和「查不到」（舊欄位 update、message 不變）
+                try { $res = Step-BackgroundRest $st.Job }
+                catch {
+                    $ex = $_.Exception; while ($ex.InnerException) { $ex = $ex.InnerException }
+                    Send-JsonRaw $c @{ ok = $true; update = $null; status = 'error'; message = "無法連到 GitHub：$($ex.Message)"
+                        current = [string]$st.Tool.Version; runFrom = $(if ($st.Tool.Id -ceq 'dev-toolbox') { $script:HubRunFrom } else { $null }) }
+                    return $true
+                }
                 if ($null -eq $res) { return $false }
                 $t = $st.Tool
                 $offer = Select-ToolRelease $t $st.Repo $script:HubManifest.version $res.Data -LocalPython { param($id,$abi) Find-CompatibleToolPython $id $abi }
@@ -1311,7 +1326,8 @@ function Route-Request($req, $ctx) {
                 $message = if (-not $offer -and $t.Source -eq 'catalog' -and $t.Id -in $script:PortablePythonToolIds) {
                     '目前沒有相容的安裝套件。輕量版需要 Python 3.11 以上及工具所需的相依套件；也可以等待發布內附 Python 的完整版。'
                 }
-                Send-JsonRaw $c @{ ok = $true; update = $update; message = $message }
+                Send-JsonRaw $c @{ ok = $true; update = $update; message = $message; status = $(if ($update) { 'available' } else { 'latest' })
+                    current = [string]$t.Version; runFrom = $(if ($t.Id -ceq 'dev-toolbox') { $script:HubRunFrom } else { $null }) }
                 return $true
             } }
             return

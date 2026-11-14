@@ -651,7 +651,7 @@ function renderAll() {
   $('pageManage').classList.toggle('tb-hidden', state.page !== 'manage');
   renderNav();
   if (state.page === 'tool') renderTool();
-  if (state.page === 'settings') renderUpdateButton(els.hubUpdate, hubUpdateTarget());
+  if (state.page === 'settings') { renderUpdateButton(els.hubUpdate, hubUpdateTarget()); renderHubStatus(); }
   if (state.page === 'dash') renderDash();
   if (state.page === 'manage') renderLibrary();
 }
@@ -783,6 +783,38 @@ function hubUpdateTarget() {
   return state.hub?.version ? { id: 'dev-toolbox', name: 'Dev-Toolbox Hub', version: state.hub.version } : null;
 }
 
+// 設定 → 更新卡片的「Hub 版本」列：目前版本、從哪裡執行、檢查狀態；「檢查更新」略過快取重查
+const RUN_FROM = { git: '從 git 資料夾執行', store: '從 Hub 更新資料夾執行', folder: '從安裝資料夾執行' };
+function renderHubStatus() {
+  const target = hubUpdateTarget();
+  const check = target && updateChecks.get(target.id);
+  const runFrom = (state.hub && state.hub.runFrom) || (check && check.runFrom) || '';
+  $('hubVerText').textContent = target ? `v${target.version}` + (RUN_FROM[runFrom] ? ` · ${RUN_FROM[runFrom]}` : '') : '';
+  $('hubGitNote').classList.toggle('tb-hidden', runFrom !== 'git');
+  const status = $('hubUpdateStatus');
+  let text = '檢查中…', tone = 'muted', title = '';
+  const oldServer = state.hub && !(Array.isArray(state.hub.features) && state.hub.features.includes('hub-update-status'));
+  if (!target) { text = '讀取中…'; }
+  // 舊伺服器（0.5.1 以前）的檢查結果不可信（陣列沒展開，永遠查不到新版），直接請使用者重開
+  else if (oldServer) { text = RESTART_MSG; tone = 'warn'; }
+  else if (check && !check.pending) {
+    if (check.restart) { text = RESTART_MSG; tone = 'warn'; }
+    else if (check.status === 'error') { text = '無法連到 GitHub（離線或被擋），稍後會再試。'; tone = 'warn'; title = check.message; }
+    else if (check.offer) { text = `有新版 v${check.offer.version}`; tone = 'accent'; }
+    else { text = `已是最新 v${target.version}`; tone = 'ok'; }
+  }
+  status.textContent = text;
+  status.title = title;
+  status.dataset.tone = tone;
+  $('hubCheck').disabled = !target || Boolean(check && check.pending) || Boolean(state.busy[target && target.id]);
+}
+$('hubCheck').addEventListener('click', () => {
+  const target = hubUpdateTarget();
+  if (!target || state.busy[target.id]) return;
+  updateChecks.set(target.id, { current: '', force: true });   // current 不符 → renderUpdateButton 立刻重查
+  renderAll();
+});
+
 const installProgress = $('installProgress');
 installProgress.addEventListener('cancel', (event) => event.preventDefault());
 
@@ -812,12 +844,19 @@ async function downloadAndInstall(name, request) {
 function renderUpdateButton(button, tool) {
   let check = tool && updateChecks.get(tool.id);
   if (tool && (!check || check.current !== tool.version || (!check.pending && check.expires < Date.now() && !state.busy[tool.id]))) {
-    check = { current: tool.version, pending: true };
+    check = { current: tool.version, pending: true, force: Boolean(check && check.force) };
     updateChecks.set(tool.id, check);
-    apiPost('/api/tools/update/check', { id: tool.id }).then(({ update }) => {
+    apiPost('/api/tools/update/check', { id: tool.id, force: Boolean(check.force) }).then(({ update, status, message, runFrom }) => {
       check.offer = update;
-      check.expires = Date.now() + (update ? 8 : 5) * 60000;
-    }).catch(() => {
+      // 新伺服器回 status（available／latest／error）；舊伺服器沒有，就用有沒有 update 判斷
+      check.status = status || (update ? 'available' : 'latest');
+      check.message = message || '';
+      check.runFrom = runFrom || '';
+      check.expires = Date.now() + (check.status === 'error' ? 1 : update ? 8 : 5) * 60000;
+    }).catch((err) => {
+      check.status = 'error';
+      check.message = err.message;
+      check.restart = err.code === 'HUB_RESTART';
       check.expires = Date.now() + 60000;
     }).finally(() => {
       check.pending = false;
@@ -1401,7 +1440,7 @@ async function executeCleanup() {
 $('cleanupPreview').addEventListener('click', previewCleanup);
 
 // 伺服器在 /api/health 回報 features；舊伺服器沒有這個欄位或缺少功能時，先在頁面上提示要重新啟動
-const UI_FEATURES = ['cleanup'];
+const UI_FEATURES = ['cleanup', 'hub-update-status'];
 function syncHubFeatures(h) {
   const have = Array.isArray(h && h.features) ? h.features : [];
   const missing = UI_FEATURES.filter((f) => !have.includes(f));

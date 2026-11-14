@@ -129,9 +129,6 @@
               <h2 class="tb-page-head__title">設定</h2>
               <div class="tb-page-head__sub">存在 Hub 的資料夾；由 Hub 啟動的工具會自動套用。</div>
             </div>
-            <div class="hub-head-actions">
-              <button class="tb-btn tb-btn--primary tb-hidden" id="hubUpdate" type="button"></button>
-            </div>
           </div>
           <div class="tb-grid tb-grid--2">
             <div class="tb-card">
@@ -204,14 +201,25 @@
           </div>
           <div class="tb-card hub-advanced" id="cleanupCard">
             <h3 class="tb-section-title"><i data-tb-icon="refresh-cw"></i>更新</h3>
-            <div class="hub-advanced__row">
+            <div class="hub-advanced__row hub-update-row">
+              <div>
+                <div class="tb-choice__title">Hub 版本 <span class="hub-update-ver" id="hubVerText"></span></div>
+                <div class="tb-small hub-update-status" id="hubUpdateStatus">檢查中…</div>
+                <div class="tb-muted tb-small tb-hidden" id="hubGitNote">從 git 執行，也可以用 git pull 更新。用這裡的「更新 Hub」下載的新版會放在 Hub 的更新資料夾，不會改動 repo。</div>
+              </div>
+              <div class="hub-update-actions">
+                <button class="tb-btn" id="hubCheck" type="button"><i data-tb-icon="refresh-cw" data-anim="pop"></i>檢查更新</button>
+                <button class="tb-btn tb-btn--primary tb-hidden" id="hubUpdate" type="button"></button>
+              </div>
+            </div>
+            <div class="hub-advanced__row hub-cleanup-row">
               <div>
                 <div class="tb-choice__title">清理舊版檔案</div>
                 <div class="tb-muted tb-small">Hub 更新工具（含 Hub 本體）時，舊版會留在更新資料夾。每個工具保留目前版與一個舊版，更早的版本可以清理。先預覽，預覽不會動到任何檔案。</div>
               </div>
               <button class="tb-btn" id="cleanupPreview" type="button"><i data-tb-icon="search" data-anim="pop"></i>預覽可清理的版本</button>
             </div>
-            <p class="hub-cleanup__note tb-hidden" id="hubRestartNote">Hub 的介面已更新，但伺服器還是舊版程式：請關閉 Hub 後重新開啟，才能使用清理舊版。</p>
+            <p class="hub-cleanup__note tb-hidden" id="hubRestartNote">Hub 的介面已更新，但伺服器還是舊版程式：請關閉 Hub 後重新開啟，才能使用這張卡片的功能。</p>
             <div class="hub-cleanup tb-hidden" id="cleanupBody" aria-live="polite"></div>
           </div>
           <div class="tb-card hub-advanced">
