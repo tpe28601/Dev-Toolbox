@@ -27,6 +27,7 @@ Dev-Toolbox Hub：本機工具主控台（只綁 127.0.0.1）。
 - `POST /api/tools/update/check`（`id`）、`POST /api/tools/update/apply`（`id`、`version`、`restart`）
 - `POST /api/tools/library`（安裝清單的匯入、連結及顯示設定）、`POST /api/tools/folder`（選取本機資料夾）
 - `POST /api/settings`、`POST /api/python/check`、`POST /api/shutdown`
+- `POST /api/cleanup/preview`、`POST /api/cleanup/execute`（`confirm`、`permanent`、`items: [{ id, version }]`）、`GET /api/cleanup/status`（背景執行，回傳進度與結果）
 
 資料夾：`%LOCALAPPDATA%\DevToolbox\dev-toolbox-hub`（`settings.json`、啟動工具 stdout/stderr 於 `jobs\`）。
 
@@ -35,6 +36,14 @@ Dev-Toolbox Hub：本機工具主控台（只綁 127.0.0.1）。
 開啟工具頁會自動檢查該工具的公開 Releases，支援 Agents Cfg Manager、Build Runner、Git Ref Manager、Key Manager、HLK Viewer 和 Script Editor。有相容的正式版才會顯示「下載更新」。確認後才會下載。若工具由 Hub 啟動，Hub 會在套件驗證完成後停止工具、切換版本並重啟。新版啟動檢查失敗時會切回原本版本。在 Hub 外啟動的 Web 服務須先手動關閉。
 
 Hub 和 `Run-Hub.bat` 共用資料目錄下的 `tool-updates\`。每份 Toolbox 安裝有自己的更新目錄，Git checkout 和工具的使用者資料保留。新版 ZIP 需要包含實際執行所需的工具檔案；Python 工具使用 Hub 設定的直譯器、環境變數或系統 Python。若依賴原本工具目錄下的 `.venv`，請在 Hub 設定中指定可用的 Python。
+
+### 清理舊版檔案
+
+設定頁「更新 → 清理舊版檔案」先預覽（只讀）更新目錄裡的版本：每個工具（含 Hub 本體）保留目前版（`active.txt`）與一個保留的舊版，更早且套件有效的版本才列為可清理，並顯示大小與略過原因。確認後才清理，預設移到資源回收筒，勾「永久刪除」才直接刪除。
+
+- 略過：連結（junction）或內含連結的資料夾、不明檔案與資料夾、安裝暫存、`tool.json` 不符、比目前版新的版本、版本指標缺失或損毀的整個工具，以及有程序的執行檔或命令列指向該資料夾的版本。
+- 清理時每個工具先取得 `update.lock`（更新進行中就略過），重新判斷一次，再暫時改名確認沒有檔案被開啟，才刪除。
+- 掃描與刪除在背景執行，Hub 照常回應；邏輯在 `Tool-Cleanup.ps1`。
 
 ### 發布可更新的 ZIP
 

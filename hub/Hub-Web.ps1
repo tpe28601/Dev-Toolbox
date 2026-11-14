@@ -1005,6 +1005,43 @@ function Step-BackgroundRest($Job) {
     } finally { $Job.PS.Dispose() }
 }
 
+# ---------------- 清理舊版（背景掃描／刪除，Hub 不會被卡住；一次只跑一個） ----------------
+# 邏輯在 Tool-Cleanup.ps1；這裡只負責背景執行、進度與結果。
+$script:CleanupJob = $null
+
+function Start-CleanupJob([string]$Kind, $Items, [bool]$Permanent) {
+    $shared = [hashtable]::Synchronized(@{ done = 0; total = 0; label = '' })
+    $ps = [PowerShell]::Create()
+    [void]$ps.AddScript({
+        param($dir, $store, $kind, $items, $permanent, $shared)
+        $ErrorActionPreference = 'Stop'
+        . (Join-Path $dir 'Tool-Updates.ps1')
+        . (Join-Path $dir 'Tool-Cleanup.ps1')
+        if ($kind -eq 'preview') { Get-ToolCleanupPlan $store $shared }
+        else { Invoke-ToolCleanup $store $items $permanent $shared }
+    }).AddArgument($PSScriptRoot).AddArgument($script:ToolUpdateStore).AddArgument($Kind).AddArgument($Items).AddArgument($Permanent).AddArgument($shared)
+    $script:CleanupJob = @{ Id = [guid]::NewGuid().ToString('N').Substring(0, 12); Kind = $Kind; PS = $ps; Async = $ps.BeginInvoke()
+        Shared = $shared; State = 'running'; Result = $null; Error = '' }
+}
+
+function Get-CleanupJobView {
+    $j = $script:CleanupJob
+    if (-not $j) { return $null }
+    if ($j.State -eq 'running' -and $j.Async.IsCompleted) {
+        try {
+            $out = $j.PS.EndInvoke($j.Async)
+            if ($j.PS.HadErrors -and $j.PS.Streams.Error.Count -gt 0) { throw $j.PS.Streams.Error[0].Exception }
+            $j.Result = @($out) | Select-Object -Last 1
+            $j.State = 'done'
+        } catch {
+            $ex = $_.Exception; while ($ex.InnerException) { $ex = $ex.InnerException }
+            $j.Error = $ex.Message; $j.State = 'failed'
+        } finally { $j.PS.Dispose() }
+    }
+    return [pscustomobject]@{ id = $j.Id; kind = $j.Kind; state = $j.State; done = [int]$j.Shared.done; total = [int]$j.Shared.total
+        label = [string]$j.Shared.label; result = $j.Result; error = $j.Error }
+}
+
 # ---------------- 延後回應 ----------------
 # 需要等待的請求（啟動／停止工具、選資料夾、檢查更新）把 $ctx.Deferred 設成
 # @{ State; Poll = { param($state, $ctx) ...; 完成時填好 $ctx 並回傳 $true } }，
@@ -1086,6 +1123,10 @@ function Route-Request($req, $ctx) {
                 Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; settings = (Get-HubSettings) })
                 return
             }
+            '/api/cleanup/status' {
+                Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; job = (Get-CleanupJobView) })
+                return
+            }
             '/api/icon' {
                 $iconId = ''
                 $qs = (([string]$req.RawUrl) -split '\?', 2)
@@ -1149,6 +1190,29 @@ function Route-Request($req, $ctx) {
             $script:ToolUpdateOffers.Clear()
             $script:RuntimeDetailCache.Clear()
             Send-JsonRaw $ctx @{ ok = $true }
+            return
+        }
+        { $_ -in '/api/cleanup/preview', '/api/cleanup/execute' } {
+            $running = Get-CleanupJobView
+            if ($running -and $running.state -eq 'running') { throw @{ code = 'CLEANUP_BUSY'; message = '清理舊版正在進行中，請等它完成。' } }
+            if ($path -eq '/api/cleanup/preview') {
+                Start-CleanupJob 'preview' @() $false
+            } else {
+                $b = Read-JsonBody $req
+                if ($b.confirm -isnot [bool] -or -not $b.confirm) { throw @{ code = 'BAD_REQUEST'; message = '請先確認要清理的版本。' } }
+                if ($b.permanent -isnot [bool]) { throw @{ code = 'BAD_REQUEST'; message = '缺少刪除方式。' } }
+                $items = @()
+                foreach ($i in @($b.items)) {
+                    if ($i.id -isnot [string] -or -not $script:ToolReleaseRepos.ContainsKey($i.id) -or
+                        $i.version -isnot [string] -or -not (ConvertTo-ToolVersion $i.version)) {
+                        throw @{ code = 'BAD_REQUEST'; message = '清理清單包含無效的工具或版本。' }
+                    }
+                    $items += [pscustomobject]@{ id = $i.id; version = $i.version }
+                }
+                if ($items.Count -eq 0 -or $items.Count -gt 500) { throw @{ code = 'BAD_REQUEST'; message = '沒有要清理的版本。' } }
+                Start-CleanupJob 'execute' $items ([bool]$b.permanent)
+            }
+            Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; job = (Get-CleanupJobView) })
             return
         }
         '/api/tools/library' {

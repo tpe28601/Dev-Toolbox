@@ -202,6 +202,17 @@
               </div>
             </div>
           </div>
+          <div class="tb-card hub-advanced" id="cleanupCard">
+            <h3 class="tb-section-title"><i data-tb-icon="refresh-cw"></i>更新</h3>
+            <div class="hub-advanced__row">
+              <div>
+                <div class="tb-choice__title">清理舊版檔案</div>
+                <div class="tb-muted tb-small">Hub 更新工具（含 Hub 本體）時，舊版會留在更新資料夾。每個工具保留目前版與一個舊版，更早的版本可以清理。先預覽，預覽不會動到任何檔案。</div>
+              </div>
+              <button class="tb-btn" id="cleanupPreview" type="button"><i data-tb-icon="search" data-anim="pop"></i>預覽可清理的版本</button>
+            </div>
+            <div class="hub-cleanup tb-hidden" id="cleanupBody" aria-live="polite"></div>
+          </div>
           <div class="tb-card hub-advanced">
             <h3 class="tb-section-title"><i data-tb-icon="triangle-alert"></i>進階</h3>
             <div class="hub-advanced__row">

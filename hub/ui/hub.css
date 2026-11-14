@@ -601,3 +601,22 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 :root[data-theme=light][data-hub-bg=liquid] { --hub-lq-btn-shadow: 0 2px 6px -2px rgba(40, 60, 110, 0.22); }
 :root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]) {
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--hub-lq-btn-shadow); }
+/* ============ 設定 → 更新：清理舊版檔案 ============ */
+.hub-cleanup { margin-top: var(--tb-space-3); display: grid; gap: var(--tb-space-3); }
+.hub-cleanup__summary { margin: 0; font-weight: 600; }
+.hub-cleanup__note { margin: 0; color: var(--tb-warn); font-size: var(--tb-fs-sm); }
+.hub-cleanup__product { border: 1px solid var(--tb-border); border-radius: var(--tb-radius-lg); padding: var(--tb-space-2) var(--tb-space-3);
+  display: grid; gap: 2px; background: color-mix(in srgb, var(--tb-surface-2) 60%, transparent); }
+.hub-cleanup__head { display: flex; align-items: baseline; gap: var(--tb-space-3); flex-wrap: wrap; padding-bottom: 4px; }
+.hub-cleanup__row { display: grid; grid-template-columns: minmax(120px, max-content) 80px minmax(0, 1fr); gap: var(--tb-space-3);
+  font-size: var(--tb-fs-sm); padding: 3px 0; border-top: 1px solid color-mix(in srgb, var(--tb-border) 60%, transparent); }
+.hub-cleanup__ver { font-family: var(--tb-font-mono, ui-monospace, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-cleanup__size { color: var(--tb-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.hub-cleanup__state { min-width: 0; overflow-wrap: anywhere; }
+.hub-cleanup__state--keep, .hub-cleanup__state--done { color: var(--tb-ok); }
+.hub-cleanup__state--clean { color: var(--tb-danger); font-weight: 600; }
+.hub-cleanup__state--skip { color: var(--tb-muted); }
+.hub-cleanup__state--fail { color: var(--tb-danger); }
+.hub-cleanup__foot { display: flex; align-items: center; gap: var(--tb-space-2); flex-wrap: wrap; }
+.hub-cleanup__spacer { flex: 1; }
+@media (max-width: 640px) { .hub-cleanup__row { grid-template-columns: minmax(0, 1fr) auto; } .hub-cleanup__state { grid-column: 1 / -1; } }

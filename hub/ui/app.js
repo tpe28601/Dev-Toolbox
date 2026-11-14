@@ -1228,6 +1228,169 @@ $('resetHubSettings').addEventListener('click', async () => {
   } catch (error) { toast('danger', error.message); }
 });
 
+// ---------- 設定 → 更新：清理舊版檔案 ----------
+// 先預覽（背景掃描、只讀），列出目前版、保留的舊版、可清理的版本與略過原因；
+// 使用者確認後才清理，預設送到資源回收筒，勾「永久刪除」才直接刪除。後端在背景跑，這裡輪詢進度。
+const cleanup = { plan: null, busy: false };
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return n + ' B';
+  const u = ['KB', 'MB', 'GB'];
+  let i = -1;
+  do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+  return (n >= 100 ? n.toFixed(0) : n.toFixed(1)) + ' ' + u[i];
+}
+function cleanupName(id) {
+  if (id === 'dev-toolbox') return 'Hub 本體';
+  const t = state.tools.find((x) => x.id === id);
+  return (t && t.name) || id;
+}
+function cleanupItems(plan) {
+  return (plan.products || []).flatMap((p) => (p.cleanable || []).map((c) => ({ id: p.id, version: c.version, bytes: c.bytes })));
+}
+function setCleanupBusy(busy) {
+  cleanup.busy = busy;
+  $('cleanupPreview').disabled = busy;
+  $('cleanupBody').querySelectorAll('button, input').forEach((b) => { b.disabled = busy; });
+}
+function cleanupProgress(job, verb) {
+  const body = $('cleanupBody');
+  body.classList.remove('tb-hidden');
+  let line = body.querySelector('.hub-cleanup__progress');
+  if (!line) {
+    body.replaceChildren();
+    line = el('div', 'hub-cleanup__progress hub-install-progress');
+    line.innerHTML = icon('loader');
+    line.append(el('span'));
+    body.append(line);
+  }
+  const n = job && job.total ? `（${job.done} / ${job.total}）` : '';
+  line.lastElementChild.textContent = `${verb}${n}${job && job.label ? ' · ' + job.label : ''}`;
+}
+async function waitCleanup(verb) {
+  for (;;) {
+    const { job } = await apiGet('/api/cleanup/status');
+    if (!job || job.state !== 'running') return job;
+    cleanupProgress(job, verb);
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
+function cleanupRow(version, size, text, kind) {
+  const row = el('div', 'hub-cleanup__row');
+  row.append(el('span', 'hub-cleanup__ver', version), el('span', 'hub-cleanup__size', size || ''));
+  const s = el('span', 'hub-cleanup__state' + (kind ? ' hub-cleanup__state--' + kind : ''), text);
+  row.append(s);
+  return row;
+}
+function renderCleanupPlan(plan) {
+  cleanup.plan = plan;
+  const body = $('cleanupBody');
+  body.replaceChildren();
+  body.classList.remove('tb-hidden');
+  if (plan.note) body.append(el('p', 'hub-cleanup__note', plan.note));
+  const items = cleanupItems(plan);
+  const total = items.reduce((a, b) => a + (Number(b.bytes) || 0), 0);
+  const products = plan.products || [];
+  body.append(el('p', 'hub-cleanup__summary', items.length
+    ? `可清理 ${items.length} 個版本，約 ${fmtBytes(total)}。`
+    : products.length ? '目前沒有可清理的舊版。' : '更新資料夾裡沒有 Hub 下載的版本。'));
+  for (const p of products) {
+    const box = el('div', 'hub-cleanup__product');
+    const head = el('div', 'hub-cleanup__head');
+    head.append(el('strong', '', cleanupName(p.id)));
+    const meta = [p.current ? '目前 v' + p.current.version : '', p.retained ? '保留 v' + p.retained.version : ''].filter(Boolean).join(' · ');
+    if (meta) head.append(el('span', 'tb-muted tb-small', meta));
+    box.append(head);
+    if (p.note) box.append(el('div', 'hub-cleanup__note', p.note));
+    if (p.current) box.append(cleanupRow('v' + p.current.version, fmtBytes(p.current.bytes), '目前版', 'keep'));
+    if (p.retained) box.append(cleanupRow('v' + p.retained.version, fmtBytes(p.retained.bytes), '保留的舊版', 'keep'));
+    for (const c of p.cleanable || []) box.append(cleanupRow('v' + c.version, fmtBytes(c.bytes), '可清理', 'clean'));
+    for (const s of p.skipped || []) {
+      const isVer = /^\d+\.\d+\.\d+$/.test(s.version);
+      box.append(cleanupRow(isVer ? 'v' + s.version : s.version, s.bytes ? fmtBytes(s.bytes) : '', '略過：' + s.reason, 'skip'));
+    }
+    body.append(box);
+  }
+  const foot = el('div', 'hub-cleanup__foot');
+  const perm = el('label', 'tb-check');
+  const cb = el('input');
+  cb.type = 'checkbox'; cb.id = 'cleanupPermanent';
+  perm.append(cb, el('span', '', '永久刪除（不經過資源回收筒）'));
+  const again = el('button', 'tb-btn', '重新預覽');
+  again.type = 'button';
+  again.addEventListener('click', previewCleanup);
+  const run = el('button', 'tb-btn tb-btn--danger');
+  run.type = 'button';
+  run.innerHTML = icon('trash-2');
+  run.append(document.createTextNode(items.length ? `清理 ${items.length} 個版本` : '清理'));
+  run.disabled = !items.length;
+  run.addEventListener('click', executeCleanup);
+  foot.append(perm, el('span', 'hub-cleanup__spacer'), again, run);
+  body.append(foot);
+}
+function renderCleanupResult(res) {
+  const body = $('cleanupBody');
+  body.replaceChildren();
+  const list = res.items || [];
+  const done = list.filter((x) => x.status === 'deleted');
+  const freed = done.reduce((a, b) => a + (Number(b.bytes) || 0), 0);
+  const where = res.permanent ? '已永久刪除' : '已移到資源回收筒';
+  const rest = list.length - done.length;
+  body.append(el('p', 'hub-cleanup__summary', done.length
+    ? `${where} ${done.length} 個版本（${fmtBytes(freed)}）` + (rest ? `，${rest} 個沒有處理。` : '。')
+    : `沒有清理任何版本，${rest} 個沒有處理。`));
+  const box = el('div', 'hub-cleanup__product');
+  for (const x of list) {
+    const ok = x.status === 'deleted';
+    box.append(cleanupRow(`${cleanupName(x.id)} v${x.version}`, ok ? fmtBytes(x.bytes) : '',
+      ok ? where : (x.status === 'failed' ? '失敗：' : '略過：') + x.reason, ok ? 'done' : x.status === 'failed' ? 'fail' : 'skip'));
+  }
+  body.append(box);
+  const foot = el('div', 'hub-cleanup__foot');
+  const again = el('button', 'tb-btn', '重新預覽');
+  again.type = 'button';
+  again.addEventListener('click', previewCleanup);
+  foot.append(el('span', 'hub-cleanup__spacer'), again);
+  body.append(foot);
+}
+async function runCleanupJob(path, body, verb) {
+  if (cleanup.busy) return null;
+  setCleanupBusy(true);
+  cleanupProgress(null, verb);
+  try {
+    try { await apiPost(path, body); }
+    catch (error) { if (error.code !== 'CLEANUP_BUSY') throw error; toast('info', error.message); }
+    const job = await waitCleanup(verb);
+    if (!job) throw new Error('找不到清理工作。');
+    if (job.state === 'failed') throw new Error(job.error || '清理失敗。');
+    return job;
+  } catch (error) {
+    $('cleanupBody').replaceChildren(el('p', 'hub-cleanup__note', error.message));
+    toast('danger', error.message);
+    return null;
+  } finally { setCleanupBusy(false); }
+}
+async function previewCleanup() {
+  const job = await runCleanupJob('/api/cleanup/preview', {}, '掃描更新資料夾');
+  if (job && job.kind === 'preview') renderCleanupPlan(job.result || {});
+  else if (job) renderCleanupResult(job.result || {});
+}
+async function executeCleanup() {
+  const items = cleanupItems(cleanup.plan || {});
+  if (!items.length) return;
+  const permanent = Boolean($('cleanupPermanent') && $('cleanupPermanent').checked);
+  const total = fmtBytes(items.reduce((a, b) => a + (Number(b.bytes) || 0), 0));
+  const text = permanent
+    ? `會永久刪除 ${items.length} 個舊版（約 ${total}），無法從資源回收筒復原。`
+    : `會把 ${items.length} 個舊版（約 ${total}）移到資源回收筒，需要時可以還原。`;
+  if (!await confirmDialog('清理舊版檔案', text + '\n\n清理前會再檢查一次：正在使用或已變動的版本會略過。',
+    { label: permanent ? '永久刪除' : '移到資源回收筒', danger: true })) return;
+  const job = await runCleanupJob('/api/cleanup/execute',
+    { confirm: true, permanent, items: items.map(({ id, version }) => ({ id, version })) }, '清理中');
+  if (job) renderCleanupResult(job.result || {});
+}
+$('cleanupPreview').addEventListener('click', previewCleanup);
+
 async function installTool(t) {
   if (state.busy[t.id]) return;
   state.busy[t.id] = 'install';

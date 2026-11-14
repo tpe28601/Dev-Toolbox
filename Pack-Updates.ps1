@@ -19,7 +19,7 @@ if ($WorkingTree -and $Ref -ne 'HEAD') { throw 'WorkingTree cannot be combined w
 $packages = [ordered]@{
     'dev-toolbox' = @{
         dir = '.'
-        files = @('Open-Web.bat', 'Run-Hub.bat', 'hub/Hub-Web.ps1', 'hub/hub.ps1', 'hub/Tool-Updates.ps1', 'hub/Tool-Library.ps1', 'hub/ui',
+        files = @('Open-Web.bat', 'Run-Hub.bat', 'hub/Hub-Web.ps1', 'hub/hub.ps1', 'hub/Tool-Updates.ps1', 'hub/Tool-Library.ps1', 'hub/Tool-Cleanup.ps1', 'hub/ui',
             'ui-kit/cli-kit.ps1', 'ui-kit/ui-kit.css', 'ui-kit/tb-theme.js', 'ui-kit/tb-icons.js')
     }
     'agents-cfg-manager' = @{
