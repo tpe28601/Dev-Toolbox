@@ -454,9 +454,158 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
   :root[data-hub-side=collapsed] .hub-brand-logo:focus-visible { outline: none; box-shadow: var(--tb-focus); }
 }
 
+/* ============ 回饋修正 2 ============ */
+
+/* 管理工具列：[顯示在 Hub][開啟／安裝][⋯]；沒有開關的列（未安裝）主要按鈕仍在同一欄 */
+.hub-library-actions--row { grid-template-columns: 148px 96px 36px; }
+@media (max-width: 760px) { .hub-library-actions--row { grid-template-columns: 1fr auto auto; } }
+
+/* 側欄底部：展開時是文字；收合時只有置中的盾牌圖示（滑過看位址、點一下複製網址） */
+.hub-side-foot { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hub-side-foot > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-foot-icon { display: inline-grid; flex: none; place-items: center; width: 28px; height: 26px; margin: 0; padding: 0; border: 1px solid transparent;
+  border-radius: var(--tb-radius); background: transparent; color: var(--tb-muted); cursor: pointer; }
+.hub-foot-icon:hover, .hub-foot-icon:focus-visible { color: var(--tb-ok); background: var(--tb-surface-2); outline: none; }
+.hub-foot-icon:hover > .tb-icon[data-anim="pop"] { animation: tb-popicon .35s ease; }
+@media (min-width: 961px) {
+  :root[data-hub-side=collapsed] .tb-side__foot.hub-side-foot { display: flex; justify-content: center; padding-left: 0; padding-right: 0; }
+  :root[data-hub-side=collapsed] .hub-side-foot > span { display: none; }
+  :root[data-hub-side=collapsed] .hub-foot-icon { width: 36px; height: 28px; }
+}
+@media (max-width: 960px) and (min-width: 641px) {
+  .tb-side__foot.hub-side-foot { display: flex; justify-content: center; padding-left: 0; padding-right: 0; }
+  .hub-side-foot > span { display: none; }
+  .hub-foot-icon { width: 36px; height: 28px; }
+}
+
+/* ----- 液態玻璃（真正的）：清透、輕模糊、邊緣折射、強鏡面高光、膠囊按鈕 -----
+   大面板（側欄、工具框、對話框、選單）：backdrop-filter 用 SVG 位移濾鏡做折射（Chromium），再加 7px 模糊與高飽和；
+   不支援時只剩模糊與高光。卡片不做 backdrop-filter（效能），用同樣的高光層次。 */
+.hub-svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+:root[data-hub-bg=liquid] { --tb-radius-xl: 22px; --tb-radius-lg: 16px;
+  --hub-lq-fx: url(#hub-liquid) blur(7px) saturate(190%) brightness(1.04); }
+:root[data-theme=dark][data-hub-bg=liquid] { --tb-bg: #060912; --tb-text: #f6f8fc; --tb-muted: #c6cddb;
+  --tb-surface: rgba(255, 255, 255, 0.05); --tb-surface-2: rgba(255, 255, 255, 0.10); --tb-surface-3: rgba(255, 255, 255, 0.15);
+  --tb-border: rgba(255, 255, 255, 0.16); --tb-border-strong: rgba(255, 255, 255, 0.30); --tb-scroll: rgba(255, 255, 255, 0.28);
+  --hub-lq-tint: rgba(8, 12, 24, 0.34); --hub-lq-hi: rgba(255, 255, 255, 0.60); --hub-lq-lo: rgba(255, 255, 255, 0.14);
+  --hub-lq-solid: rgba(16, 20, 34, 0.72); }
+:root[data-theme=light][data-hub-bg=liquid] { --tb-bg: #e9eef7; --tb-text: #0a1120; --tb-muted: #2f3b52;
+  --tb-surface: rgba(255, 255, 255, 0.30); --tb-surface-2: rgba(255, 255, 255, 0.46); --tb-surface-3: rgba(255, 255, 255, 0.60);
+  --tb-border: rgba(255, 255, 255, 0.70); --tb-border-strong: rgba(10, 17, 32, 0.18); --tb-scroll: rgba(10, 17, 32, 0.22);
+  --hub-lq-tint: rgba(255, 255, 255, 0.36); --hub-lq-hi: rgba(255, 255, 255, 0.95); --hub-lq-lo: rgba(255, 255, 255, 0.45);
+  --hub-lq-solid: rgba(248, 250, 254, 0.70); }
+/* 背景：鮮明的柔和色塊，讓透明與折射看得出來 */
+:root[data-hub-bg=liquid] body::before { background:
+  radial-gradient(30rem 24rem at 12% 12%, color-mix(in srgb, var(--tb-accent) 62%, transparent), transparent 62%),
+  radial-gradient(28rem 22rem at 88% 18%, color-mix(in srgb, #ec4899 52%, transparent), transparent 62%),
+  radial-gradient(34rem 26rem at 70% 92%, color-mix(in srgb, #06b6d4 50%, transparent), transparent 64%),
+  radial-gradient(26rem 20rem at 20% 88%, color-mix(in srgb, #f59e0b 40%, transparent), transparent 62%); }
+/* 表面：極淡底（保文字對比）＋左上鏡面高光；上緣強反光、下緣柔和反射、左右極淡色散 */
+:root[data-hub-bg=liquid] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
+  background-color: var(--hub-lq-tint);
+  background-image: radial-gradient(140% 70% at 0% 0%, color-mix(in srgb, var(--hub-lq-hi) 30%, transparent), transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, var(--hub-lq-hi) 14%, transparent), transparent 35%, transparent 75%, color-mix(in srgb, var(--hub-lq-lo) 40%, transparent));
+  border: 1px solid var(--tb-border);
+  box-shadow: inset 0 1px 0 var(--hub-lq-hi), inset 0 -1px 0 var(--hub-lq-lo),
+    inset 1px 0 0 rgba(255, 120, 210, 0.16), inset -1px 0 0 rgba(90, 220, 255, 0.16),
+    0 10px 30px rgba(0, 0, 0, 0.22); }
+:root[data-hub-bg=liquid] :is(.tb-side, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
+  backdrop-filter: var(--hub-lq-fx); -webkit-backdrop-filter: blur(7px) saturate(190%); }
+:root[data-hub-bg=liquid] :is(.tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) { background-color: var(--hub-lq-solid); border-radius: 26px; }
+:root[data-hub-bg=liquid] .tb-dialog-backdrop, :root[data-hub-bg=liquid] dialog.tb-dialog::backdrop { background: rgba(5, 8, 16, 0.22); backdrop-filter: blur(2px); }
+/* 膠囊玻璃按鈕與選取項；滑過時高光從左流到右 */
+:root[data-hub-bg=liquid] :is(.tb-btn, .tb-seg, .tb-seg__btn, .tb-input, .tb-nav__item) { border-radius: 999px; }
+:root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]) {
+  background-image: linear-gradient(110deg, transparent 35%, color-mix(in srgb, var(--hub-lq-hi) 45%, transparent) 50%, transparent 65%),
+    linear-gradient(180deg, color-mix(in srgb, var(--hub-lq-hi) 22%, transparent), transparent 60%);
+  background-size: 260% 100%, 100% 100%; background-position: 120% 0, 0 0;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: background-position .6s ease, border-color var(--tb-transition), color var(--tb-transition); }
+:root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]):hover { background-position: -20% 0, 0 0; }
+:root[data-hub-bg=liquid] .tb-btn:not(.tb-btn--primary):not(.tb-btn--danger) { background-color: var(--tb-surface-2); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-hub-bg=liquid] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu) { background-color: var(--hub-lq-solid); }
+}
+
+/* ============ 側欄：展開與收合排列一致（寬螢幕） ============
+   一條固定的圖示欄：側欄左右留白 6px、項目左內距 18px → 圖示中心永遠在側欄左緣 32px；
+   logo、區段標題、底部項目、wifi 位址都對齊這條欄。收合只把寬度縮成 64px、文字淡出，
+   圖示與狀態點的 x、y 都不動；切換都點 logo（滑過時翻轉成收合／展開圖示）。 */
+@media (min-width: 961px) {
+  .tb-shell { transition: grid-template-columns .24s cubic-bezier(.2, .8, .2, 1); }
+  .hub-side { padding: var(--tb-space-3) 6px; overflow: hidden; }
+  .hub-side .tb-brand { height: 56px; box-sizing: border-box; padding: 4px 0 12px 10px; flex-direction: row; gap: 10px; flex: none; }
+  /* 名稱一律單行（過長以「…」截斷，完整名稱在滑鼠提示），展開／收合的列高才會相同 */
+  .hub-side .tb-nav__label { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset; line-clamp: unset; }
+  .hub-side .hub-nav__tool { padding-top: 0; padding-bottom: 0; }
+  .hub-side .hub-side-toggle { display: none; }
+  .hub-side .tb-nav__item { padding-left: 18px; padding-right: 10px; justify-content: flex-start; }
+  .hub-side .hub-side__group { position: relative; padding-left: 18px; white-space: nowrap; overflow: hidden; }
+  .hub-side .hub-nav__dot { position: absolute; left: 30px; top: 7px; margin: 0; width: 7px; height: 7px; }
+  .hub-side :is(.tb-brand__text, .tb-nav__label, .hub-side-foot > span) {
+    transition: opacity .2s ease, transform .24s cubic-bezier(.2, .8, .2, 1); }
+  .hub-side .tb-side__foot.hub-side-foot { display: flex; padding: 10px 0 4px 12px; justify-content: flex-start; }
+  .hub-side .hub-foot-icon { width: 28px; height: 26px; margin: 0; }
+
+  /* 收合：文字淡出並往左輕移、區段標題變成細線，位置不變 */
+  :root[data-hub-side=collapsed] .tb-shell { grid-template-columns: var(--tb-rail-w) minmax(0, 1fr); }
+  :root[data-hub-side=collapsed] .hub-side { padding: var(--tb-space-3) 6px; }
+  :root[data-hub-side=collapsed] .hub-side .tb-brand { flex-direction: row; gap: 10px; padding: 4px 0 12px 10px; height: 56px; }
+  :root[data-hub-side=collapsed] .hub-side :is(.tb-brand__text, .tb-nav__label, .hub-side-foot > span) {
+    display: block; opacity: 0; transform: translateX(-6px); pointer-events: none; white-space: nowrap; }
+  :root[data-hub-side=collapsed] .hub-side .tb-nav__item { justify-content: flex-start; padding-left: 18px; }
+  :root[data-hub-side=collapsed] .hub-side .hub-nav__dot { left: 30px; right: auto; top: 7px; }
+  :root[data-hub-side=collapsed] .hub-side .hub-side__group { display: block; color: transparent; }
+  :root[data-hub-side=collapsed] .hub-side .hub-side__group::after { content: ''; position: absolute; left: 14px; right: 14px; top: 55%;
+    border-top: 1px solid var(--tb-border); }
+  :root[data-hub-side=collapsed] .hub-side .tb-side__foot.hub-side-foot { justify-content: flex-start; padding: 10px 0 4px 12px; }
+  :root[data-hub-side=collapsed] .hub-side .hub-foot-icon { width: 28px; height: 26px; }
+  :root[data-hub-side=collapsed] .hub-side .tb-nav__item[aria-current="page"]::before { left: 3px; }
+
+  /* 切換動畫進行中：文字一律單行、主內容不出現橫向捲軸（避免換行抖動與捲軸閃現） */
+  :root.hub-side-anim .hub-side .tb-nav__label { white-space: nowrap; -webkit-line-clamp: 1; line-clamp: 1; }
+  :root.hub-side-anim .tb-main { overflow-x: hidden; }
+
+  /* logo 是切換鈕：滑過時翻轉成收合／展開圖示 */
+  .hub-brand-logo.is-toggle { cursor: pointer; }
+  .hub-brand-logo.is-toggle > span { transition: opacity .15s ease, transform .24s ease; }
+  .hub-brand-logo.is-toggle:is(:hover, :focus-visible) .hub-brand-logo__main { opacity: 0; transform: rotateY(90deg); }
+  .hub-brand-logo.is-toggle .hub-brand-logo__open { transform: rotateY(-90deg); }
+  .hub-brand-logo.is-toggle:is(:hover, :focus-visible) .hub-brand-logo__open { opacity: 1; transform: rotateY(0); }
+  .hub-brand-logo.is-toggle:focus-visible { outline: none; box-shadow: var(--tb-focus); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tb-shell, .hub-side :is(.tb-brand__text, .tb-nav__label, .hub-side-foot > span), .hub-brand-logo > span { transition: none !important; }
+}
+
 /* 設定：主題風格分兩組 */
 .hub-bg-group { margin-top: 2px; }
 
 /* 匯入本機工具：等待資料夾選擇視窗 */
 .hub-browse-wait { display: flex; align-items: center; justify-content: space-between; gap: var(--tb-space-3); }
 .hub-browse-wait[hidden] { display: none; }
+
+
+/* ============ 玻璃主題：面板邊緣的暗色直條 ============
+   原因：卡片的大陰影（模糊 28–30px）被捲動區（.hub-page-body，overflow:auto）左右邊界硬切，
+   在側欄與內容之間留下一條有硬邊的暗帶；側欄的灰黑陰影在淺色背景上也把那條縫壓暗。
+   修法：捲動區往左右各延伸 8px（內距補回，版面不動），讓陰影有地方淡出；
+   玻璃主題的陰影改成負擴散（水平最多 12px）、淺色改用帶藍的淡陰影，色散邊改成白色高光。 */
+@media (min-width: 641px) {
+  .hub-page-body { margin-inline: -8px; padding-inline: calc(var(--tb-space-1) + 8px); }
+}
+:root[data-hub-bg=liquid] { --hub-lq-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.55);
+  --hub-lq-disp-l: rgba(255, 120, 210, 0.14); --hub-lq-disp-r: rgba(90, 220, 255, 0.14); }
+:root[data-theme=light][data-hub-bg=liquid] { --hub-lq-shadow: 0 12px 24px -12px rgba(40, 60, 110, 0.22);
+  --hub-lq-disp-l: rgba(255, 255, 255, 0.55); --hub-lq-disp-r: rgba(255, 255, 255, 0.55); }
+:root[data-hub-bg=liquid] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
+  box-shadow: inset 0 1px 0 var(--hub-lq-hi), inset 0 -1px 0 var(--hub-lq-lo),
+    inset 1px 0 0 var(--hub-lq-disp-l), inset -1px 0 0 var(--hub-lq-disp-r), var(--hub-lq-shadow); }
+:root[data-hub-bg=glass] { --hub-glass-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.5); }
+:root[data-theme=light][data-hub-bg=glass] { --hub-glass-shadow: 0 12px 24px -12px rgba(40, 60, 110, 0.20); }
+:root[data-hub-bg=glass] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu) { box-shadow: inset 0 1px 0 var(--hub-glass-hi), var(--hub-glass-shadow); }
+/* 膠囊按鈕／選取項的陰影也收小（水平最多 4px），不會被側欄 6px 留白硬切；淺色用帶藍的淡陰影 */
+:root[data-hub-bg=liquid] { --hub-lq-btn-shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.30); }
+:root[data-theme=light][data-hub-bg=liquid] { --hub-lq-btn-shadow: 0 2px 6px -2px rgba(40, 60, 110, 0.22); }
+:root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]) {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--hub-lq-btn-shadow); }

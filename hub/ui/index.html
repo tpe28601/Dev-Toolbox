@@ -36,7 +36,10 @@
         <a class="tb-nav__item" href="?page=settings" id="navSettings" title="設定"><i data-tb-icon="settings" data-anim="spin"></i><span class="tb-nav__label">設定</span></a>
         <button class="tb-nav__item hub-nav--danger" id="navShutdown" type="button" title="關閉 Hub（由 Hub 啟動的工具也會停止）"><i data-hub-icon="power" data-anim="pulse"></i><span class="tb-nav__label">關閉 HUB</span></button>
       </div>
-      <div class="tb-side__foot" id="hubInfo">本機工具，只綁定 127.0.0.1</div>
+      <div class="tb-side__foot hub-side-foot">
+        <button class="hub-foot-icon" id="hubInfoIcon" type="button" title="Hub 只綁本機（127.0.0.1）" aria-label="複製 Hub 網址"><i data-hub-icon="wifi" data-anim="pop"></i></button>
+        <span id="hubInfo">本機工具，只綁定 127.0.0.1</span>
+      </div>
     </aside>
 
     <main class="tb-main">
@@ -157,7 +160,8 @@
                   </div>
                   <span class="tb-field__hint hub-bg-group">質感</span>
                   <div class="tb-seg hub-seg-wrap" role="group" aria-label="主題風格：質感">
-                    <button class="tb-seg__btn" data-bg="glass" type="button">液態玻璃</button>
+                    <button class="tb-seg__btn" data-bg="liquid" type="button">液態玻璃</button>
+                    <button class="tb-seg__btn" data-bg="glass" type="button">霧面玻璃</button>
                     <button class="tb-seg__btn" data-bg="frost" type="button">磨砂</button>
                     <button class="tb-seg__btn" data-bg="metal" type="button">金屬</button>
                     <button class="tb-seg__btn" data-bg="pearl" type="button">珠光</button>
@@ -214,6 +218,15 @@
   </div>
 
   <div class="tb-toast-area" id="toastArea" aria-live="polite"></div>
+
+  <!-- 液態玻璃的折射：只給 backdrop-filter: url(#hub-liquid) 用（Chromium）；其他瀏覽器忽略，退回純 CSS 高光 -->
+  <svg class="hub-svg-defs" aria-hidden="true" focusable="false">
+    <filter id="hub-liquid" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.006 0.009" numOctaves="2" seed="11" result="noise"/>
+      <feGaussianBlur in="noise" stdDeviation="3" result="soft"/>
+      <feDisplacementMap in="SourceGraphic" in2="soft" scale="26" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
 
   <dialog class="tb-dialog hub-library-dialog" id="libraryDialog" aria-labelledby="libraryTitle">
     <form id="libraryForm">

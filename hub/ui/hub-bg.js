@@ -5,7 +5,7 @@
  * 只影響 Hub 介面本身，不影響嵌入的工具頁面。 */
 (function () {
   'use strict';
-  var BG = ['graphite', 'warm', 'nord', 'contrast', 'black', 'glass', 'frost', 'metal', 'pearl',
+  var BG = ['graphite', 'warm', 'nord', 'contrast', 'black', 'liquid', 'glass', 'frost', 'metal', 'pearl',
     'glow', 'grid', 'dots', 'dusk', 'forest', 'mono', 'cyber'];
   var root = document.documentElement;
   root.dataset.hubStrength = 'bold';

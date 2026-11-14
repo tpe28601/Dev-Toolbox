@@ -413,7 +413,7 @@ function renderTool() {
   // 啟動中／停止中：保留對應按鈕顯示轉圈。用不到的按鈕直接隱藏，不顯示成灰色。
   const busy = state.busy[t.id];
   const external = s === 'running' && !t.running.managed;
-  els.btnStart.classList.toggle('tb-hidden', !(canStart || busy === 'start'));
+  els.btnStart.classList.toggle('tb-hidden', busy !== 'start');   // 未啟動時的入口是卡片上的「啟動這個工具」
   els.btnStart.disabled = !canStart;
   els.btnStart.classList.toggle('is-busy', busy === 'start');
   els.btnStop.classList.toggle('tb-hidden', !(s === 'running' || busy === 'stop'));
@@ -900,7 +900,7 @@ els.navTheme.addEventListener('click', (ev) => {
 
 // ---------- 主題風格（僅 Hub 整體色調，localStorage hub.bg；hub-bg.js 繪製前先套） ----------
 const BG_NAMES = { graphite: '石墨', warm: '暖灰', nord: '冷灰藍', contrast: '高對比', black: '純黑', plain: '經典',
-  glass: '液態玻璃', frost: '磨砂', metal: '金屬', pearl: '珠光', glow: '光暈', grid: '網格', dots: '點陣', dusk: '暮色', forest: '森林', mono: '黑白', cyber: '霓虹' };
+  liquid: '液態玻璃', glass: '霧面玻璃', frost: '磨砂', metal: '金屬', pearl: '珠光', glow: '光暈', grid: '網格', dots: '點陣', dusk: '暮色', forest: '森林', mono: '黑白', cyber: '霓虹' };
 function setBg(v) {
   if (!BG_NAMES[v]) return;
   save('hub.bg', v);
@@ -1115,7 +1115,7 @@ function renderLibrary() {
       if (t.source === 'managed') more.push(['解除安裝', 'circle-x', () => confirmToolCleanup(t, 'uninstall'), true]);
       if (t.dataPath) more.push(['清除資料', 'trash-2', () => confirmToolCleanup(t, 'clearData'), true]);
       if (more.length) slotMore.append(moreMenu(t, more));
-      actions.append(slotMain, slotToggle, slotMore);
+      actions.append(slotToggle, slotMain, slotMore);
       row.append(glyph, info, actions);
       section.append(row);
     }
@@ -1467,6 +1467,13 @@ $('iconSave').addEventListener('click', () => {
   else if (c.kind === 'image') saveIcon({ kind: 'image', data: c.data });
 });
 
+// 側欄底部的盾牌圖示（收合時才看得到）：點一下複製 Hub 網址
+$('hubInfoIcon').addEventListener('click', async () => {
+  const url = $('hubInfoIcon').dataset.url || location.origin;
+  try { await navigator.clipboard.writeText(url); toast('ok', '已複製 ' + url); }
+  catch (_) { toast('info', url); }
+});
+
 // ---------- 綁定 ----------
 els.navDash.addEventListener('click', (ev) => { ev.preventDefault(); openDash(); });
 els.dashRefresh.addEventListener('click', () => refresh());
@@ -1495,25 +1502,33 @@ els.btnPopout.addEventListener('click', () => {
 function isSideCollapsed() {
   return document.documentElement.dataset.hubSide === 'collapsed' && matchMedia('(min-width: 961px)').matches;
 }
+// 收合／展開都點 logo：滑過時 logo 換成收合或展開的提示圖示（960px 以下本來就是圖示列，logo 不切換）
 function syncSideToggle() {
   const collapsed = document.documentElement.dataset.hubSide === 'collapsed';
-  els.sideToggle.setAttribute('aria-pressed', String(collapsed));
-  els.sideToggle.title = els.sideToggle.ariaLabel = '收合側欄';
-  els.sideToggle.innerHTML = icon('panel-left-close', { anim: 'nudge' });
+  const wide = matchMedia('(min-width: 961px)').matches;
   const logo = $('brandLogo');
-  const label = isSideCollapsed() ? '展開側欄' : 'Dev-Toolbox';
+  const label = !wide ? 'Dev-Toolbox' : collapsed ? '展開側欄' : '收合側欄';
   logo.title = label;
   logo.setAttribute('aria-label', label);
+  logo.setAttribute('aria-pressed', String(wide && collapsed));
+  logo.classList.toggle('is-toggle', wide);
+  logo.querySelector('.hub-brand-logo__open').innerHTML = icon(collapsed ? 'panel-left-open' : 'panel-left-close', { size: 18 });
 }
 function setSideCollapsed(collapsed) {
+  // 動畫期間（約 260ms）文字單行、主內容不出橫向捲軸
+  const root = document.documentElement;
+  root.classList.add('hub-side-anim');
+  clearTimeout(setSideCollapsed.t);
+  setSideCollapsed.t = setTimeout(() => root.classList.remove('hub-side-anim'), 320);
   if (collapsed) document.documentElement.dataset.hubSide = 'collapsed';
   else delete document.documentElement.dataset.hubSide;
   save('hub.side', collapsed ? 'collapsed' : 'expanded');
   syncSideToggle();
   requestAnimationFrame(syncNavFade);
 }
-els.sideToggle.addEventListener('click', () => setSideCollapsed(true));
-$('brandLogo').addEventListener('click', () => { if (isSideCollapsed()) setSideCollapsed(false); });
+$('brandLogo').addEventListener('click', () => {
+  if (matchMedia('(min-width: 961px)').matches) setSideCollapsed(document.documentElement.dataset.hubSide !== 'collapsed');
+});
 window.addEventListener('resize', syncSideToggle);
 function syncSideFade() {
   const s = els.side;
@@ -1548,6 +1563,9 @@ new MutationObserver(syncNavFade).observe(els.nav, { childList: true });
     state.hub = h;
     els.hubVersion.textContent = `Hub v${h.version}`;
     els.hubInfo.textContent = `127.0.0.1:${h.port} · 只綁本機`;
+    // 側欄收合時只顯示盾牌圖示：滑過看完整位址，點一下複製網址
+    $('hubInfoIcon').title = `http://127.0.0.1:${h.port}（只綁本機，點一下複製網址）`;
+    $('hubInfoIcon').dataset.url = `http://127.0.0.1:${h.port}`;
   } catch (_) { /* 拿不到版本不影響使用 */ }
   await refresh();
   startPolling();
