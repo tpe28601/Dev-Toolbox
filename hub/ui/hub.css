@@ -412,3 +412,7 @@ a.tb-btn, a.tb-btn:hover { text-decoration: none; }
   .hub-side-foot > span { display: none; }
   .hub-foot-icon { width: 36px; height: 36px; }
 }
+
+/* 管理工具：有新版的工具在名稱下方顯示小的「更新 vX」按鈕（不佔用固定的三格操作欄） */
+.hub-lib-update { margin-top: 6px; padding: 3px 10px; min-height: 0; font-size: var(--tb-fs-sm); justify-self: start; width: max-content; }
+.hub-lib-update .tb-icon { width: 14px; height: 14px; }

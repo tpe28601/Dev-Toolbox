@@ -851,6 +851,17 @@ async function downloadAndInstall(name, request) {
 }
 
 function renderUpdateButton(button, tool) {
+  const check = ensureUpdateCheck(tool);
+  const offer = check?.offer;
+  const updating = Boolean(tool && state.busy[tool.id] === 'update');
+  button.classList.toggle('tb-hidden', !offer);
+  // 啟動／停止等其他處理中只停用按鈕，文字維持「下載更新」；真的在更新時才顯示「下載並安裝中…」
+  button.disabled = !offer || Boolean(tool && state.busy[tool.id]);
+  button.textContent = offer ? (updating ? '下載並安裝中…' : `下載更新 v${offer.version}`) : '';
+}
+
+// 需要時向伺服器檢查更新（有快取），回傳目前的檢查狀態；檢查完成會 renderAll()
+function ensureUpdateCheck(tool) {
   let check = tool && updateChecks.get(tool.id);
   if (tool && (!check || check.current !== tool.version || (!check.pending && check.expires < Date.now() && !state.busy[tool.id]))) {
     check = { current: tool.version, pending: true, force: Boolean(check && check.force) };
@@ -872,10 +883,7 @@ function renderUpdateButton(button, tool) {
       renderAll();
     });
   }
-  const offer = check?.offer;
-  button.classList.toggle('tb-hidden', !offer);
-  button.disabled = !offer || Boolean(tool && state.busy[tool.id]);
-  button.textContent = offer ? (button.disabled ? '下載並安裝中…' : `下載更新 v${offer.version}`) : '';
+  return check;
 }
 
 async function applyUpdate(tool) {
@@ -1107,9 +1115,12 @@ function openLink(t) {
 }
 
 function renderLibrary() {
-  const rows = state.tools.map(({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed }) =>
-    ({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed }));
-  const fingerprint = JSON.stringify([state.loaded, rows, state.busy]);
+  const rows = state.tools.map(({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed, canUpdate }) =>
+    ({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed, canUpdate }));
+  // 已安裝、可更新的官方工具：檢查有沒有新版（共用工具頁的快取），有就在列上顯示「更新」
+  for (const t of state.tools) if (t.installed && t.canUpdate) ensureUpdateCheck(t);
+  const offers = rows.map((t) => updateChecks.get(t.id)?.offer?.version || '');
+  const fingerprint = JSON.stringify([state.loaded, rows, state.busy, offers]);
   if (fingerprint === libraryFingerprint) return;
   libraryFingerprint = fingerprint;
   closeMoreMenu();   // 清單要重建：開著的「⋯」選單對應的按鈕會被換掉
@@ -1133,6 +1144,17 @@ function renderLibrary() {
       const info = el('div', 'hub-library-info');
       const category = { import: '本機匯入', link: '網站連結', catalog: '官方工具', managed: '官方工具', bundled: '本機工具' }[t.source];
       info.append(el('strong', '', t.name), el('div', 'tb-muted', [category, t.version && 'v' + t.version].filter(Boolean).join(' · ')));
+      const offer = t.installed && t.canUpdate ? updateChecks.get(t.id)?.offer : null;
+      if (offer) {
+        const upd = el('button', 'tb-btn tb-btn--primary hub-lib-update');
+        upd.type = 'button';
+        upd.dataset.focusKey = t.id + ':update';
+        upd.disabled = Boolean(state.busy[t.id]);
+        upd.innerHTML = icon('download');
+        upd.append(document.createTextNode(state.busy[t.id] === 'update' ? '下載並安裝中…' : `更新 v${offer.version}`));
+        upd.addEventListener('click', () => applyUpdate(state.tools.find((x) => x.id === t.id)));
+        info.append(upd);
+      }
       if (t.error && t.source !== 'catalog') info.append(el('div', 'hub-library-error', t.error));
       if (t.desc || t.path || t.url) info.append(el('div', 'tb-muted', [t.desc, t.path || t.url].filter(Boolean).join(' · ')));
       // 每列固定三格：[主要操作] [顯示在 Hub] [⋯ 更多]，上下對齊；用不到的格子留空
