@@ -1108,6 +1108,8 @@ function Route-Request($req, $ctx) {
                 Send-JsonRaw $ctx ([pscustomobject]@{
                     ok = $true; id = [string]$script:HubManifest.id; version = [string]$script:HubManifest.version
                     pid = $PID; port = $Port; uptimeSec = [int]((Get-Date) - $script:StartedAt).TotalSeconds
+                    # 介面用來判斷伺服器是不是新程式（介面檔更新後、伺服器沒重開時提示）
+                    features = @('cleanup')
                 })
                 return
             }

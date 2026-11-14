@@ -63,12 +63,20 @@ function el(tag, cls, text) {
 }
 
 // ---------- 基礎 API ----------
+// 介面檔案更新了、但 Hub 伺服器還是舊程式時，新的 API 會回 404：改成說明要重新啟動 Hub
+const RESTART_MSG = 'Hub 需要重新啟動才能使用這個功能（請關閉 Hub 後重新開啟）。';
+function restartError() {
+  const err = new Error(RESTART_MSG);
+  err.code = 'HUB_RESTART';
+  return err;
+}
 async function apiPost(path, body) {
   const resp = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Toolbox-Request': '1' },
     body: JSON.stringify(body || {}),
   });
+  if (resp.status === 404 && path.startsWith('/api/')) throw restartError();
   let data = null;
   try { data = await resp.json(); } catch (_) { /* 非 JSON 回應 */ }
   if (!data || data.ok !== true) {
@@ -82,6 +90,7 @@ async function apiPost(path, body) {
 
 async function apiGet(path) {
   const resp = await fetch(path);
+  if (resp.status === 404 && path.startsWith('/api/')) throw restartError();
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
 }
@@ -1391,6 +1400,14 @@ async function executeCleanup() {
 }
 $('cleanupPreview').addEventListener('click', previewCleanup);
 
+// 伺服器在 /api/health 回報 features；舊伺服器沒有這個欄位或缺少功能時，先在頁面上提示要重新啟動
+const UI_FEATURES = ['cleanup'];
+function syncHubFeatures(h) {
+  const have = Array.isArray(h && h.features) ? h.features : [];
+  const missing = UI_FEATURES.filter((f) => !have.includes(f));
+  $('hubRestartNote').classList.toggle('tb-hidden', !missing.length);
+}
+
 async function installTool(t) {
   if (state.busy[t.id]) return;
   state.busy[t.id] = 'install';
@@ -1729,6 +1746,7 @@ new MutationObserver(syncNavFade).observe(els.nav, { childList: true });
     // 側欄收合時只顯示盾牌圖示：滑過看完整位址，點一下複製網址
     $('hubInfoIcon').title = `http://127.0.0.1:${h.port}（只綁本機，點一下複製網址）`;
     $('hubInfoIcon').dataset.url = `http://127.0.0.1:${h.port}`;
+    syncHubFeatures(h);
   } catch (_) { /* 拿不到版本不影響使用 */ }
   await refresh();
   startPolling();
