@@ -9,7 +9,7 @@ const els = {
   dashGrid: $('dashGrid'), dashSummary: $('dashSummary'), dashRefresh: $('dashRefresh'),
   dashActs: $('dashActs'), dashShutdown: $('navShutdown'), btnStart: $('btnStart'), toolNote: $('toolNote'),
   side: $('hubSide'), sideToggle: $('sideToggle'),
-  toolName: $('toolName'), toolBadge: $('toolBadge'), toolStatus: $('toolStatus'),
+  toolIcon: $('toolIcon'), toolName: $('toolName'), toolBadge: $('toolBadge'), toolStatus: $('toolStatus'),
   toolUpdate: $('toolUpdate'), hubUpdate: $('hubUpdate'),
   btnStop: $('btnStop'), btnReload: $('btnReload'), btnPopout: $('btnPopout'),
   frameBox: $('frameBox'), placeholder: $('placeholder'),
@@ -23,7 +23,7 @@ const els = {
 
 const TOOL_ICONS = {
   'git-ref-manager': 'git-branch', 'agents-cfg-manager': 'package', 'key-manager': 'key',
-  'build-runner': 'terminal', 'hlk-viewer': 'shield', 'script-editor': 'file-code',
+  'build-runner': 'terminal', 'hlk-viewer': 'file-text', 'script-editor': 'file-code',
   'token-meter': 'gauge'
 };
 const ACCENT_NAMES = { blue: '藍', green: '綠', violet: '紫', orange: '橘', rose: '玫瑰' };
@@ -404,6 +404,9 @@ function renderPlaceholder(title, desc, iconName, hint) {
 
 function renderTool() {
   const t = state.selected ? toolById(state.selected) : null;
+  els.toolIcon.classList.toggle('tb-hidden', !t);
+  const brandIcon = t ? toolIconHtml(t, { size: 17 }) : '';
+  if (els.toolIcon.innerHTML !== brandIcon) els.toolIcon.innerHTML = brandIcon;
   renderUpdateButton(els.toolUpdate, t?.canUpdate ? t : null);
   if (!t) {
     els.toolName.textContent = 'Dev-Toolbox';

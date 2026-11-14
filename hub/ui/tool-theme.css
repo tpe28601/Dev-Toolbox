@@ -1,6 +1,30 @@
 /* ============ Hub 與嵌入工具的風格 ============ */
 /* iframe 自成一頁，光斑放在該頁底色之上、內容之下，讓半透明面板看得到背景。 */
 :root[data-embedded][data-hub-bg] body.tb-app { isolation: isolate; }
+/* 工具嵌入 Hub 時，頂部分頁與操作列沿用同一種玻璃底色。 */
+:root[data-embedded]:is([data-hub-bg=glass], [data-hub-bg=liquid]) :is(.tool-tabs, .tb-theme-toolbar) {
+  background: var(--tb-bg);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-embedded]:is([data-hub-bg=glass], [data-hub-bg=liquid]) :is(.tool-tabs, .tb-theme-toolbar) {
+    background: color-mix(in srgb, var(--tb-bg) 36%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+:root[data-embedded][data-hub-bg=liquid] :is(.tool-tabs, .tb-theme-toolbar) .tb-tab {
+  border-radius: 999px;
+}
+:root[data-embedded]:is([data-hub-bg=glass], [data-hub-bg=liquid]) :is(.tb-toast, .tb-theme-toast) {
+  background: color-mix(in srgb, var(--tb-bg) 88%, var(--tb-surface-2));
+  overflow-wrap: anywhere;
+}
+:root[data-embedded][data-hub-bg=liquid] :is(.tb-theme-control, .tb-dp__path) {
+  border-radius: 999px;
+}
+:root[data-embedded]:is([data-hub-bg=glass], [data-hub-bg=liquid]) :is(.tb-table, .tb-theme-panel > table) th {
+  background: color-mix(in srgb, var(--tb-bg) 84%, var(--tb-surface-2));
+}
 :root[data-hub-bg] { --hub-glass: var(--tb-surface); --hub-glass-fx: none; --hub-tex-k: 1; }
 :root[data-hub-strength=soft] { --hub-tex-k: .45; }
 :root:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) {
@@ -56,7 +80,6 @@
   box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 8px 28px rgba(0, 0, 0, 0.18); }
 :root[data-hub-bg=glass]:not([data-hub-strength=soft]) :is(.tb-side, .tb-sidebar, .hub-framebox, .tb-dialog, .tb-theme-dialog, .hub-menu) {
   backdrop-filter: var(--hub-glass-fx); -webkit-backdrop-filter: var(--hub-glass-fx); }
-:root[data-hub-bg=glass] :is(.tb-dialog, .tb-theme-dialog) { background: var(--hub-glass-solid); box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.35); }
 :root[data-hub-bg=glass] :is(.tb-btn, .tb-input, .tb-seg) { border-radius: 12px; }
 :root[data-hub-bg=glass] .tb-nav__item { border-radius: 12px; }
 :root[data-hub-bg=glass][data-hub-strength=soft] { --tb-surface: var(--hub-glass-solid); }
@@ -108,12 +131,10 @@
 
 /* ----- 所有對話框（確認、匯入、連結、安裝、更換圖示）跟著主題 ----- */
 :root[data-hub-bg=glass] :is(.tb-dialog, .tb-theme-dialog) {
-  background: color-mix(in srgb, var(--hub-glass-solid) 62%, transparent);
+  background: var(--hub-glass-solid);
   backdrop-filter: saturate(180%) blur(30px); -webkit-backdrop-filter: saturate(180%) blur(30px);
   border: 1px solid var(--tb-border-strong); border-radius: 22px;
   box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 24px 70px rgba(0, 0, 0, 0.38); }
-:root[data-hub-bg=glass] .tb-dialog-backdrop { background: rgba(5, 8, 16, 0.32); backdrop-filter: blur(4px); }
-:root[data-hub-bg=glass] :is(dialog.tb-dialog, dialog.tb-theme-dialog)::backdrop { background: rgba(5, 8, 16, 0.32); backdrop-filter: blur(4px); }
 
 /* ----- 磨砂：不透明霧面＋細顆粒雜訊（不用 backdrop-filter，效能最好） ----- */
 :root[data-hub-bg=frost] { --hub-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .14 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); --tb-radius-xl: 18px; }
@@ -196,7 +217,20 @@
 :root[data-hub-bg=liquid] :is(.tb-side, .tb-sidebar, .hub-framebox, .hub-menu, .tb-dialog, .tb-theme-dialog) {
   backdrop-filter: var(--hub-lq-fx, blur(7px) saturate(190%) brightness(1.04)); -webkit-backdrop-filter: blur(7px) saturate(190%); }
 :root[data-hub-bg=liquid] :is(.tb-dialog, .tb-theme-dialog) { background-color: var(--hub-lq-solid); border-radius: 26px; }
-:root[data-hub-bg=liquid] .tb-dialog-backdrop, :root[data-hub-bg=liquid] :is(dialog.tb-dialog, dialog.tb-theme-dialog)::backdrop { background: rgba(5, 8, 16, 0.22); backdrop-filter: blur(2px); }
+/* 模糊遮罩下的頁面，保留玻璃底色並避免背後文字穿透。 */
+:root:is([data-hub-bg=glass], [data-hub-bg=liquid]) :is(.tb-dialog-backdrop, .tb-theme-backdrop),
+:root:is([data-hub-bg=glass], [data-hub-bg=liquid]) :is(dialog.tb-dialog, dialog.tb-theme-dialog)::backdrop {
+  background: rgba(5, 8, 16, 0.46);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+/* Key Manager can open the shared picker inside a native modal. Blur the form behind it. */
+:root:is([data-hub-bg=glass], [data-hub-bg=liquid]) dialog[open] .tb-dp {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+:root[data-hub-bg=glass] dialog[open] .tb-dp__box { background-color: var(--hub-glass-solid); }
+:root[data-hub-bg=liquid] dialog[open] .tb-dp__box { background-color: var(--hub-lq-solid); }
 /* 膠囊玻璃按鈕與選取項；滑過時高光從左流到右 */
 :root[data-hub-bg=liquid] :is(.tb-btn, .tb-seg, .tb-seg__btn, .tb-input, .tb-nav__item) { border-radius: 999px; }
 :root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]) {
@@ -209,6 +243,9 @@
 :root[data-hub-bg=liquid] .tb-btn:not(.tb-btn--primary):not(.tb-btn--danger) { background-color: var(--tb-surface-2); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root[data-hub-bg=liquid] :is(.tb-side, .tb-card, .tb-theme-panel, .hub-framebox, .hub-menu) { background-color: var(--hub-lq-solid); }
+  :root:is([data-hub-bg=glass], [data-hub-bg=liquid]) :is(.tb-dialog, .tb-theme-dialog, dialog[open] .tb-dp__box) {
+    background-color: var(--tb-bg);
+  }
 }
 
 :root[data-hub-bg=liquid] { --hub-lq-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.55);
