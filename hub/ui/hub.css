@@ -628,3 +628,16 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 .hub-update-status[data-tone="accent"] { color: var(--tb-accent); font-weight: 600; }
 .hub-advanced__row > .hub-update-actions { flex: 0 0 auto; display: flex; gap: var(--tb-space-2); flex-wrap: wrap; justify-content: flex-end; }
 .hub-cleanup-row { margin-top: var(--tb-space-3); padding-top: var(--tb-space-3); border-top: 1px solid var(--tb-border); }
+/* 總覽空狀態：和其他空狀態一致（置中、虛線框），按鈕是一般按鈕樣式（連結不加底線） */
+a.tb-btn, a.tb-btn:hover { text-decoration: none; }
+.hub-empty.tb-empty { padding: var(--tb-space-6) var(--tb-space-4); }
+.hub-empty p { margin: 0; max-width: 46ch; }
+.hub-empty__title { color: var(--tb-text); font-weight: 600; }
+.hub-empty > .tb-icon { width: 28px; height: 28px; color: var(--tb-muted); }
+
+/* 640px 以下的頂部列：底部位址只留 wifi 圖示（滑過看位址、點一下複製），不再擠出文字和分隔線 */
+@media (max-width: 640px) {
+  .tb-side__foot.hub-side-foot { flex: none; margin: 0; padding: 0 0 0 4px; border-top: 0; border-left: 1px solid var(--tb-border); }
+  .hub-side-foot > span { display: none; }
+  .hub-foot-icon { width: 36px; height: 36px; }
+}
