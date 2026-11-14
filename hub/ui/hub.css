@@ -25,7 +25,6 @@
 .hub-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .hub-py-list { margin-left: 28px; }
 .hub-py-list .tb-list__item { padding: 8px 12px; }
-#pageSettings .tb-content { padding: var(--tb-space-2) var(--tb-space-1) var(--tb-space-5); }
 @media (max-width: 640px) {
   .hub-framebox { min-height: 75vh; }
   .hub-content { overflow: visible; }
@@ -60,8 +59,6 @@
 .hub-install-progress .tb-icon { animation: tb-spin 0.9s linear infinite; flex: none; }
 
 /* ---------- 總覽（dashboard）：狀態卡＋最近的工作 ---------- */
-#pageDash .tb-content { padding: var(--tb-space-2) var(--tb-space-1) var(--tb-space-5); overflow: auto; }
-.hub-dash__actions { margin-inline-start: auto; }
 #pageDash.is-closed :is(.hub-dash-grid, .hub-act-head, .hub-act-list) { display: none; }
 .hub-dash-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .hub-empty { padding: 20px; }
@@ -117,20 +114,81 @@
   .hub-kv { grid-column: 1; grid-row: auto; }
 }
 
-/* ---------- 主題風格（僅 Hub）：8 色系 × 2 強度 ----------
-   data-hub-bg（hub-bg.js 繪製前先套，優先序 ?bg= > localStorage hub.bg）直接覆蓋
-   ui-kit 色板 token，改的是整個 Hub 色調；body::before 只負責紋理層。
-   data-hub-strength：bold（明顯，預設：表面半透明＋模糊＋紋理全開）／
-   soft（內斂：表面不透明、紋理 45%）。純色＝不設屬性，維持 ui-kit 預設色板。 */
+/* ---------- 主題風格（僅 Hub）----------
+   data-hub-bg（hub-bg.js 繪製前先套，優先序 ?bg= > localStorage hub.bg > graphite）直接覆蓋
+   ui-kit 色板 token，改的是整個 Hub 色調；body::before 只負責紋理／光斑層。
+   - 純色系（不透明表面）：graphite 石墨（預設）、warm 暖灰、nord 冷灰藍、contrast 高對比、black 純黑；plain＝經典（ui-kit 原色）
+   - 紋理系（半透明表面）：glow 光暈、grid 網格、dots 點陣、dusk 暮色、forest 森林、mono 黑白、cyber 霓虹、glass 液態玻璃
+   data-hub-strength：bold（明顯：表面半透明、大面板模糊、紋理全開）／soft（內斂：表面不透明、不模糊、紋理 45%）。
+   效能：模糊（backdrop-filter）只套在側欄、工具框、對話框這幾個大面板；卡片只做半透明，
+   不再每張卡片各自模糊（原本關閉對話框時要重畫所有模糊層，比較慢的顯示卡會頓一下）。 */
 :root { --hub-glass: var(--tb-surface); --hub-glass-fx: none; --hub-tex-k: 1; }
 :root[data-hub-strength=soft] { --hub-tex-k: .45; }
-:root[data-hub-bg]:not([data-hub-bg=plain]) { --hub-glass: color-mix(in srgb, var(--tb-surface) 80%, transparent);
+:root:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) {
+  --hub-glass: color-mix(in srgb, var(--tb-surface) 80%, transparent);
   --hub-glass-fx: saturate(1.15) blur(14px);
   --tb-border-strong: color-mix(in srgb, var(--tb-border) 80%, var(--tb-text));
   --tb-scroll: color-mix(in srgb, var(--tb-border) 85%, var(--tb-text)); }
-:root[data-hub-bg]:not([data-hub-bg=plain])[data-hub-strength=soft] { --hub-glass: var(--tb-surface); --hub-glass-fx: none; }
-:root[data-hub-bg]:not([data-hub-bg=plain]) :is(.tb-side, .tb-card, .hub-framebox) {
-  background: var(--hub-glass); backdrop-filter: var(--hub-glass-fx); -webkit-backdrop-filter: var(--hub-glass-fx); }
+:root[data-hub-strength=soft]:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) {
+  --hub-glass: var(--tb-surface); --hub-glass-fx: none; }
+:root:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) :is(.tb-side, .tb-card, .hub-framebox) {
+  background: var(--hub-glass); }
+:root:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) :is(.tb-side, .hub-framebox) {
+  backdrop-filter: var(--hub-glass-fx); -webkit-backdrop-filter: var(--hub-glass-fx); }
+
+/* ----- 純色系：石墨（預設，中性灰，藍色只留給強調色）、暖灰、冷灰藍、高對比、純黑 ----- */
+:root[data-theme=dark][data-hub-bg=graphite] { --tb-bg: #111214; --tb-surface: #18191c; --tb-surface-2: #1f2024; --tb-surface-3: #27282d;
+  --tb-border: #2e3036; --tb-border-strong: #3d4047; --tb-text: #e8e9eb; --tb-muted: #9da0a8; --tb-scroll: #3d4047; }
+:root[data-theme=light][data-hub-bg=graphite] { --tb-bg: #f3f3f4; --tb-surface: #ffffff; --tb-surface-2: #efeff1; --tb-surface-3: #e4e4e7;
+  --tb-border: #dcdce1; --tb-border-strong: #c2c3c9; --tb-text: #17181b; --tb-muted: #5c5e66; --tb-scroll: #c2c3c9; }
+:root[data-theme=dark][data-hub-bg=warm] { --tb-bg: #141210; --tb-surface: #1c1916; --tb-surface-2: #24201c; --tb-surface-3: #2d2823;
+  --tb-border: #37312a; --tb-border-strong: #4a4239; --tb-text: #ede7e0; --tb-muted: #a89e92; --tb-scroll: #4a4239; }
+:root[data-theme=light][data-hub-bg=warm] { --tb-bg: #f6f3ef; --tb-surface: #fffdfa; --tb-surface-2: #f1ece5; --tb-surface-3: #e7e0d6;
+  --tb-border: #ddd4c8; --tb-border-strong: #c7bcae; --tb-text: #1f1b17; --tb-muted: #665d53; --tb-scroll: #c7bcae; }
+:root[data-theme=dark][data-hub-bg=nord] { --tb-bg: #1f232b; --tb-surface: #262b34; --tb-surface-2: #2d333d; --tb-surface-3: #353c48;
+  --tb-border: #3b4252; --tb-border-strong: #4c566a; --tb-text: #e5e9f0; --tb-muted: #a8b0be; --tb-scroll: #4c566a; }
+:root[data-theme=light][data-hub-bg=nord] { --tb-bg: #eceff4; --tb-surface: #ffffff; --tb-surface-2: #e5e9f0; --tb-surface-3: #d8dee9;
+  --tb-border: #ccd3df; --tb-border-strong: #aeb7c6; --tb-text: #1d2330; --tb-muted: #4c566a; --tb-scroll: #aeb7c6; }
+:root[data-theme=dark][data-hub-bg=contrast] { --tb-bg: #000000; --tb-surface: #0a0a0a; --tb-surface-2: #161616; --tb-surface-3: #222222;
+  --tb-border: #737373; --tb-border-strong: #a3a3a3; --tb-text: #ffffff; --tb-muted: #dcdcdc; --tb-scroll: #a3a3a3; }
+:root[data-theme=light][data-hub-bg=contrast] { --tb-bg: #ffffff; --tb-surface: #ffffff; --tb-surface-2: #f0f0f0; --tb-surface-3: #e2e2e2;
+  --tb-border: #4d4d4d; --tb-border-strong: #1a1a1a; --tb-text: #000000; --tb-muted: #2e2e2e; --tb-scroll: #4d4d4d; }
+:root[data-hub-bg=contrast] .tb-card, :root[data-hub-bg=contrast] .tb-side { box-shadow: none; }
+:root[data-theme=dark][data-hub-bg=black] { --tb-bg: #000000; --tb-surface: #0b0b0c; --tb-surface-2: #131315; --tb-surface-3: #1b1b1e;
+  --tb-border: #232327; --tb-border-strong: #33333a; --tb-text: #e9e9eb; --tb-muted: #9d9da5; --tb-scroll: #33333a; }
+:root[data-theme=light][data-hub-bg=black] { --tb-bg: #f3f3f4; --tb-surface: #ffffff; --tb-surface-2: #efeff1; --tb-surface-3: #e4e4e7;
+  --tb-border: #dcdce1; --tb-border-strong: #c2c3c9; --tb-text: #17181b; --tb-muted: #5c5e66; --tb-scroll: #c2c3c9; }
+
+/* ----- 液態玻璃：多彩模糊光斑背景＋半透明表面＋上緣高光＋柔和陰影＋大圓角 -----
+   明顯：側欄、工具框、對話框做背景模糊（blur 24px、飽和 170%）；卡片只半透明（光斑本身已經很柔和，看起來一樣，但便宜很多）。
+   內斂：不模糊、表面較不透明。瀏覽器不支援 backdrop-filter 時退回較不透明的表面。只影響 Hub，不影響嵌入的工具頁面。 */
+:root[data-hub-bg=glass] { --tb-radius-xl: 20px; --hub-glass-fx: saturate(170%) blur(24px); }
+:root[data-theme=dark][data-hub-bg=glass] { --tb-bg: #0a0c13; --tb-text: #f2f4f8; --tb-muted: #b9c1cf;
+  --tb-surface: rgba(255, 255, 255, 0.07); --tb-surface-2: rgba(255, 255, 255, 0.11); --tb-surface-3: rgba(255, 255, 255, 0.16);
+  --tb-border: rgba(255, 255, 255, 0.12); --tb-border-strong: rgba(255, 255, 255, 0.22); --tb-scroll: rgba(255, 255, 255, 0.22);
+  --hub-glass-hi: rgba(255, 255, 255, 0.16); --hub-glass-solid: rgba(22, 26, 38, 0.92); }
+:root[data-theme=light][data-hub-bg=glass] { --tb-bg: #eaeef5; --tb-text: #0f1626; --tb-muted: #3b4558;
+  --tb-surface: rgba(255, 255, 255, 0.58); --tb-surface-2: rgba(255, 255, 255, 0.72); --tb-surface-3: rgba(255, 255, 255, 0.85);
+  --tb-border: rgba(15, 22, 38, 0.10); --tb-border-strong: rgba(15, 22, 38, 0.20); --tb-scroll: rgba(15, 22, 38, 0.22);
+  --hub-glass-hi: rgba(255, 255, 255, 0.85); --hub-glass-solid: rgba(250, 251, 253, 0.94); }
+:root[data-hub-bg=glass] body::before { opacity: var(--hub-tex-k); background:
+  radial-gradient(36rem 28rem at 8% 6%, color-mix(in srgb, var(--tb-accent) 34%, transparent), transparent 64%),
+  radial-gradient(34rem 26rem at 92% 14%, color-mix(in srgb, #ec4899 26%, transparent), transparent 64%),
+  radial-gradient(40rem 30rem at 72% 96%, color-mix(in srgb, #14b8a6 26%, transparent), transparent 66%),
+  radial-gradient(30rem 24rem at 18% 92%, color-mix(in srgb, #f59e0b 18%, transparent), transparent 64%); }
+:root[data-hub-bg=glass] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu) {
+  background: var(--tb-surface); border-color: var(--tb-border);
+  box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 8px 28px rgba(0, 0, 0, 0.18); }
+:root[data-hub-bg=glass]:not([data-hub-strength=soft]) :is(.tb-side, .hub-framebox, .tb-dialog, .hub-menu) {
+  backdrop-filter: var(--hub-glass-fx); -webkit-backdrop-filter: var(--hub-glass-fx); }
+:root[data-hub-bg=glass] :is(.tb-dialog, dialog.tb-dialog) { background: var(--hub-glass-solid); box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.35); }
+:root[data-hub-bg=glass] :is(.tb-btn, .tb-input, .tb-seg) { border-radius: 12px; }
+:root[data-hub-bg=glass] .tb-nav__item { border-radius: 12px; }
+:root[data-hub-bg=glass][data-hub-strength=soft] { --tb-surface: var(--hub-glass-solid); }
+:root[data-theme=dark][data-hub-bg=glass][data-hub-strength=soft] { --tb-surface: rgba(24, 28, 40, 0.94); --tb-surface-2: rgba(34, 39, 54, 0.95); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-hub-bg=glass] { --tb-surface: var(--hub-glass-solid); }
+}
 
 /* 紋理層：頁面底色之上、內容之下；--hub-tex-k 依強度縮放 */
 body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: transparent; }
@@ -172,3 +230,233 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 :root[data-theme=light][data-hub-bg=mono] { --tb-bg: #f2f2f3; --tb-surface: #ffffff; --tb-surface-2: #ebebed; --tb-surface-3: #e0e0e3; --tb-border: #d0d0d5; }
 :root[data-theme=dark][data-hub-bg=cyber] { --tb-bg: #060a15; --tb-surface: #0c1322; --tb-surface-2: #121c33; --tb-surface-3: #192745; --tb-border: #24385e; }
 :root[data-theme=light][data-hub-bg=cyber] { --tb-bg: #edf1f9; --tb-surface: #ffffff; --tb-surface-2: #eaeff8; --tb-surface-3: #dde5f3; --tb-border: #c4d0e6; }
+
+/* ============ 版面整理（三頁共用頁首、側欄、管理工具列、說明卡） ============ */
+
+/* 三頁（總覽、管理工具、設定）共用內容邊距與頁首：標題靠左、按鈕靠右 */
+.hub-page-body { padding: var(--tb-space-2) var(--tb-space-1) var(--tb-space-5); overflow: auto; }
+.hub-page-body > .tb-page-head { align-items: flex-end; }
+.hub-head-actions { margin-inline-start: auto; display: flex; align-items: center; gap: var(--tb-space-2); flex-wrap: wrap; }
+
+/* 側欄：目前頁面的指示線放在項目內側（原本 left:-9px 在可捲動的清單裡會被裁掉，只有設定看得到） */
+.hub-shell .tb-nav__item[aria-current="page"]::before { left: 3px; top: 9px; bottom: 9px; }
+.hub-side .tb-brand { position: relative; }
+.hub-side-toggle { margin-left: auto; flex: none; }
+.hub-nav--danger { color: var(--tb-danger); }
+.hub-nav--danger:hover { color: var(--tb-danger); background: var(--tb-danger-soft); border-color: transparent; }
+.hub-side-bottom { display: flex; flex-direction: column; gap: 2px; }
+/* 外部啟動（不是 Hub 開的）工具：空心綠點 */
+.tb-dot.hub-dot--external { background: transparent; box-shadow: inset 0 0 0 2px var(--tb-ok); }
+
+/* 寬螢幕可收合成只剩圖示（記住狀態；960px 以下本來就是圖示列，不受影響） */
+@media (min-width: 961px) {
+  :root[data-hub-side=collapsed] .tb-shell { grid-template-columns: var(--tb-rail-w) minmax(0, 1fr); }
+  :root[data-hub-side=collapsed] .tb-side { padding: var(--tb-space-2) 6px; }
+  :root[data-hub-side=collapsed] .tb-brand { flex-direction: column; gap: var(--tb-space-2); padding: var(--tb-space-1) 0 var(--tb-space-3); }
+  :root[data-hub-side=collapsed] .hub-side-toggle { margin-left: 0; }
+  :root[data-hub-side=collapsed] :is(.tb-brand__text, .tb-nav__label, .tb-side__foot, .hub-side__group) { display: none; }
+  :root[data-hub-side=collapsed] .tb-nav__item { justify-content: center; padding: 0; }
+  :root[data-hub-side=collapsed] .hub-nav__dot { position: absolute; top: 6px; right: 6px; margin: 0; width: 7px; height: 7px; }
+  :root[data-hub-side=collapsed] .hub-nav__tool .tb-nav__label { display: none; }
+}
+@media (max-width: 960px) { .hub-side-toggle { display: none; } }
+
+/* 窄螢幕（640px 以下）：側欄變成一行的頂部列，整列一起橫向捲動，兩側淡出提示還有內容 */
+@media (max-width: 640px) {
+  .hub-side { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; gap: 2px; }
+  .hub-side::-webkit-scrollbar { display: none; }
+  .hub-side .tb-brand { display: none; }
+  .hub-side .tb-nav { flex: none; overflow: visible; }
+  .hub-side .tb-nav__item { flex: none; }
+  .hub-side .hub-side-bottom { flex-direction: row; flex: none; border-top: 0; border-left: 1px solid var(--tb-border); padding: 0 0 0 4px; margin: 0 0 0 2px; }
+  .hub-side.can-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+  .hub-side.can-left { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+  .hub-side.can-left.can-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+  .hub-shell .tb-nav__item[aria-current="page"]::before { left: 10px; right: 10px; top: auto; bottom: 2px; width: auto; height: 3px; }
+}
+
+/* 工具頁上方列：外部啟動的說明 */
+.hub-toolbar__note { color: var(--tb-warn); flex-basis: 100%; }
+
+/* 工具畫面載入失敗的說明卡（蓋在 iframe 位置） */
+.hub-frame-fail { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--tb-space-5); background: var(--tb-bg); }
+.hub-frame-fail__card { width: min(560px, 100%); display: flex; flex-direction: column; gap: var(--tb-space-4); }
+
+/* 管理工具：每列 [主要操作][顯示在 Hub][⋯]，三格固定寬度讓上下對齊 */
+.hub-library-actions--row { display: grid; grid-template-columns: 96px 148px 36px; align-items: center; gap: 10px; }
+.hub-lib-slot { display: flex; justify-content: flex-end; min-width: 0; }
+.hub-lib-slot--toggle { justify-content: flex-start; }
+.hub-lib-slot .tb-btn:not(.tb-btn--icon) { min-width: 72px; justify-content: center; }
+@media (max-width: 760px) {
+  .hub-library-actions--row { grid-template-columns: auto 1fr auto; width: 100%; }
+  .hub-lib-slot--main { justify-content: flex-start; }
+}
+
+/* 「⋯」選單 */
+.hub-menu { position: fixed; z-index: 200; min-width: 168px; padding: 4px; background: var(--tb-surface); color: var(--tb-text);
+  border: 1px solid var(--tb-border-strong); border-radius: var(--tb-radius-lg); box-shadow: var(--tb-shadow); }
+.hub-menu__item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: var(--tb-radius);
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hub-menu__item:hover, .hub-menu__item:focus-visible { background: var(--tb-surface-2); outline: none; }
+.hub-menu__item--danger { color: var(--tb-danger); }
+.hub-menu__item--danger:hover, .hub-menu__item--danger:focus-visible { background: var(--tb-danger-soft); }
+
+/* 設定：Python 路徑完整顯示（可換行、可選取複製，滑過也有完整路徑） */
+.hub-py-path { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; user-select: text; }
+
+/* 設定：進階（重設） */
+.hub-advanced { margin-top: var(--tb-space-4); }
+.hub-advanced__row { display: flex; align-items: center; justify-content: space-between; gap: var(--tb-space-4); flex-wrap: wrap; }
+.hub-advanced__row > div { flex: 1 1 320px; min-width: 0; }
+
+/* ============ 自訂圖示、首頁連結卡、圖示挑選器 ============ */
+.hub-custom-icon { display: block; flex: none; object-fit: contain; border-radius: 4px; }
+.hub-emoji-icon { display: inline-grid; place-items: center; flex: none; width: 1.15em; height: 1.15em; line-height: 1;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+.tb-nav__item .hub-custom-icon, .tb-nav__item .hub-emoji-icon { width: 16px; height: 16px; }
+
+/* 首頁：連結卡與工具卡同版型；右上的外部連結標記取代狀態點 */
+.hub-link-card { cursor: pointer; }
+.hub-link-card__mark { flex: none; display: inline-flex; color: var(--tb-muted); }
+.hub-link-card:hover .hub-link-card__mark { color: var(--tb-accent); }
+.hub-link-card__kind { font-size: var(--tb-fs-lg); }
+#dashLinks:empty { display: none; }
+
+/* 圖示挑選器 */
+.hub-icon-dialog { margin: auto; width: min(600px, calc(100% - 32px)); animation: none; }
+.hub-icon-dialog::backdrop { background: rgba(5, 8, 16, 0.55); }
+.hub-icon-preview { display: flex; align-items: center; gap: var(--tb-space-3); margin-bottom: var(--tb-space-3); }
+.hub-icon-preview__box { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 14px;
+  background: var(--tb-accent-soft); color: var(--tb-accent); }
+.hub-icon-tabs { margin-bottom: var(--tb-space-3); flex-wrap: wrap; }
+.hub-icon-pane { display: grid; gap: var(--tb-space-2); }
+.hub-icon-pane[hidden] { display: none; }
+.hub-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 6px; max-height: 280px; overflow: auto; padding: 2px; }
+.hub-icon-cell { display: inline-grid; place-items: center; height: 42px; border: 1px solid var(--tb-border); border-radius: var(--tb-radius);
+  background: var(--tb-surface); color: var(--tb-text); cursor: pointer; padding: 0; font: inherit; }
+.hub-icon-cell:hover, .hub-icon-cell:focus-visible { border-color: var(--tb-accent); outline: none; background: var(--tb-surface-2); }
+.hub-icon-cell[aria-selected="true"] { border-color: var(--tb-accent); background: var(--tb-accent-soft); color: var(--tb-accent); }
+.hub-icon-cell--emoji { font-size: 20px; width: 42px; }
+.hub-icon-emoji-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.hub-icon-emoji { font-size: 24px; max-width: 120px; }
+.hub-icon-actions { align-items: center; }
+.hub-icon-actions__spacer { flex: 1; }
+
+/* 安裝／更新確認：版本說明（GitHub Release 內文，基本 Markdown）與「在 GitHub 查看」 */
+#confirmBackdrop .tb-dialog:has(#confirmNotes:not(.tb-hidden)) { width: min(600px, 100%); }
+.hub-md { max-height: 42vh; overflow: auto; color: var(--tb-text); background: var(--tb-surface-2); border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg); padding: var(--tb-space-3) var(--tb-space-4); overflow-wrap: anywhere; }
+.hub-md p { margin: 0 0 var(--tb-space-2); }
+.hub-md ul, .hub-md ol { margin: 0 0 var(--tb-space-2); padding-left: 1.4em; }
+.hub-md li { margin: 2px 0; }
+.hub-md__h { font-weight: 650; margin: var(--tb-space-2) 0 4px; }
+.hub-md__h:first-child { margin-top: 0; }
+.hub-md code { font-family: var(--tb-font-mono, Consolas, monospace); font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(--tb-surface-3); }
+.hub-md a { color: var(--tb-accent); }
+.hub-md > :last-child { margin-bottom: 0; }
+.hub-confirm-link { margin-right: auto; }
+
+/* ============ 回饋修正：微動態、對話框主題、新風格、側欄捲動、logo 展開 ============ */
+
+/* ----- 微動態（150–300ms；系統「減少動態」時 ui-kit 會全部關掉） ----- */
+@keyframes hub-pulse { 50% { transform: scale(1.18); } }
+@keyframes hub-breathe { 0%, 100% { box-shadow: 0 0 0 3px var(--tb-ok-soft); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--tb-ok) 10%, transparent); } }
+@keyframes hub-menu-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+:is(.tb-btn, .tb-nav__item):hover > .tb-icon[data-anim="pulse"] { animation: hub-pulse .3s ease; }
+.tb-dot.tb-dot--ok:not(.hub-dot--external) { animation: hub-breathe 2.4s ease-in-out infinite; }
+.tb-card__icon, .hub-library-icon { transition: transform .18s ease; }
+.tb-card--interactive:hover .tb-card__icon, .hub-library-row:hover .hub-library-icon { transform: translateY(-1px) scale(1.06); }
+.hub-library-row:hover .hub-library-icon > .tb-icon[data-anim="pop"],
+.hub-menu__item:hover > .tb-icon[data-anim="pop"] { animation: tb-popicon .35s ease; }
+.hub-link-card:hover .hub-link-card__mark > .tb-icon { animation: tb-nudge .45s ease; }
+:is(.tb-nav__item:hover, .tb-card--interactive:hover, .hub-library-row:hover) :is(.hub-custom-icon, .hub-emoji-icon) { animation: tb-popicon .35s ease; }
+.hub-menu { animation: hub-menu-in .14s ease; transform-origin: top right; }
+.tb-dialog-backdrop .tb-dialog, dialog.tb-dialog[open] { animation: tb-pop .18s ease; }
+
+/* ----- 確認框標題圖示依情境上色 ----- */
+.tb-dialog[data-tone="warn"] .tb-dialog__icon { background: var(--tb-warn-soft); color: var(--tb-warn); }
+.tb-dialog[data-tone="danger"] .tb-dialog__icon { background: var(--tb-danger-soft); color: var(--tb-danger); }
+.tb-dialog[data-tone="info"] .tb-dialog__icon { background: var(--tb-accent-soft); color: var(--tb-accent); }
+
+/* ----- 所有對話框（確認、匯入、連結、安裝、更換圖示）跟著主題 ----- */
+:is(.tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) { background: var(--tb-surface); color: var(--tb-text); border-color: var(--tb-border-strong); }
+:root[data-hub-bg=glass] :is(.tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
+  background: color-mix(in srgb, var(--hub-glass-solid) 62%, transparent);
+  backdrop-filter: saturate(180%) blur(30px); -webkit-backdrop-filter: saturate(180%) blur(30px);
+  border: 1px solid var(--tb-border-strong); border-radius: 22px;
+  box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 24px 70px rgba(0, 0, 0, 0.38); }
+:root[data-hub-bg=glass] .tb-dialog-backdrop { background: rgba(5, 8, 16, 0.32); backdrop-filter: blur(4px); }
+:root[data-hub-bg=glass] dialog.tb-dialog::backdrop { background: rgba(5, 8, 16, 0.32); backdrop-filter: blur(4px); }
+:root[data-hub-bg=glass] .hub-md { background: color-mix(in srgb, var(--tb-text) 6%, transparent); }
+
+/* ----- 磨砂：不透明霧面＋細顆粒雜訊（不用 backdrop-filter，效能最好） ----- */
+:root[data-hub-bg=frost] { --hub-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .14 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); --tb-radius-xl: 18px; }
+:root[data-theme=dark][data-hub-bg=frost] { --tb-bg: #1b1d21; --tb-surface: #25282d; --tb-surface-2: #2c2f35; --tb-surface-3: #353840;
+  --tb-border: #383c43; --tb-border-strong: #4a4e57; --tb-text: #eceef1; --tb-muted: #a9aeb8; --tb-scroll: #4a4e57; }
+:root[data-theme=light][data-hub-bg=frost] { --tb-bg: #e4e6ea; --tb-surface: #f4f5f7; --tb-surface-2: #eceef1; --tb-surface-3: #e1e4e8;
+  --tb-border: #d3d7dd; --tb-border-strong: #bcc1c9; --tb-text: #16191d; --tb-muted: #555b65; --tb-scroll: #bcc1c9; }
+:root[data-hub-bg=frost] body::before { background: var(--hub-noise); opacity: .9; }
+:root[data-hub-bg=frost] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
+  background-color: var(--tb-surface); background-image: var(--hub-noise); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+
+/* ----- 金屬：冷銀拉絲漸層＋細高光（上亮下暗的倒角） ----- */
+:root[data-theme=dark][data-hub-bg=metal] { --tb-bg: #101215; --tb-surface: #23262b; --tb-surface-2: #2b2f35; --tb-surface-3: #343840;
+  --tb-border: #3a3f47; --tb-border-strong: #50565f; --tb-text: #eef0f3; --tb-muted: #aab0ba; --tb-scroll: #50565f;
+  --hub-metal-hi: rgba(255, 255, 255, 0.14); --hub-metal-lo: rgba(0, 0, 0, 0.55); --hub-metal-line: rgba(255, 255, 255, 0.022); --hub-metal-sheen: rgba(255, 255, 255, 0.07); }
+:root[data-theme=light][data-hub-bg=metal] { --tb-bg: #d5d9df; --tb-surface: #e8ebef; --tb-surface-2: #dfe3e8; --tb-surface-3: #d3d8df;
+  --tb-border: #b9bfc8; --tb-border-strong: #9aa2ad; --tb-text: #111418; --tb-muted: #454b55; --tb-scroll: #9aa2ad;
+  --hub-metal-hi: rgba(255, 255, 255, 0.9); --hub-metal-lo: rgba(70, 80, 95, 0.25); --hub-metal-line: rgba(0, 0, 0, 0.022); --hub-metal-sheen: rgba(255, 255, 255, 0.55); }
+:root[data-hub-bg=metal] body::before { background:
+  repeating-linear-gradient(90deg, var(--hub-metal-line) 0 1px, transparent 1px 3px),
+  linear-gradient(160deg, var(--hub-metal-sheen), transparent 45%, var(--hub-metal-sheen) 70%, transparent); }
+:root[data-hub-bg=metal] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
+  background-color: var(--tb-surface);
+  background-image: linear-gradient(180deg, var(--hub-metal-sheen), transparent 38%, transparent 70%, color-mix(in srgb, var(--hub-metal-lo) 30%, transparent)),
+    repeating-linear-gradient(90deg, var(--hub-metal-line) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 1px 0 var(--hub-metal-hi), inset 0 -1px 0 var(--hub-metal-lo), 0 2px 8px rgba(0, 0, 0, 0.22); }
+:root[data-hub-bg=metal] .tb-btn:not(.tb-btn--ghost) { background-image: linear-gradient(180deg, var(--hub-metal-sheen), transparent 60%); box-shadow: inset 0 1px 0 var(--hub-metal-hi); }
+
+/* ----- 珠光：柔和虹彩漸層表面、淡淡光澤，跟強調色微調 ----- */
+:root[data-theme=dark][data-hub-bg=pearl] { --tb-bg: #15121a; --tb-surface: #211d28; --tb-surface-2: #29242f; --tb-surface-3: #322c3a;
+  --tb-border: #3c3546; --tb-border-strong: #51485e; --tb-text: #f2eef7; --tb-muted: #b9b0c7; --tb-scroll: #51485e; --hub-pearl-k: 9%; }
+:root[data-theme=light][data-hub-bg=pearl] { --tb-bg: #f3f0f6; --tb-surface: #fdfcfe; --tb-surface-2: #f5f1f8; --tb-surface-3: #ebe5f0;
+  --tb-border: #e0d7e8; --tb-border-strong: #c9bcd6; --tb-text: #1c1722; --tb-muted: #5d5468; --tb-scroll: #c9bcd6; --hub-pearl-k: 14%; }
+:root[data-hub-bg=pearl] body::before { background:
+  radial-gradient(40rem 30rem at 0% 0%, color-mix(in srgb, #f472b6 var(--hub-pearl-k), transparent), transparent 65%),
+  radial-gradient(42rem 30rem at 100% 10%, color-mix(in srgb, var(--tb-accent) var(--hub-pearl-k), transparent), transparent 65%),
+  radial-gradient(44rem 32rem at 60% 100%, color-mix(in srgb, #2dd4bf var(--hub-pearl-k), transparent), transparent 66%); }
+:root[data-hub-bg=pearl] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
+  background-color: var(--tb-surface);
+  background-image: linear-gradient(125deg,
+    color-mix(in srgb, #f9a8d4 calc(var(--hub-pearl-k) * .8), transparent),
+    color-mix(in srgb, var(--tb-accent) calc(var(--hub-pearl-k) * .6), transparent) 35%,
+    color-mix(in srgb, #99f6e4 calc(var(--hub-pearl-k) * .7), transparent) 70%,
+    color-mix(in srgb, #fde68a calc(var(--hub-pearl-k) * .5), transparent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 20px rgba(60, 30, 90, 0.10); }
+
+/* ----- 側欄清單：不顯示捲軸（仍可捲），上下淡出提示還有內容；圖示永遠置中 ----- */
+.hub-side #toolNav { scrollbar-width: none; }
+.hub-side #toolNav::-webkit-scrollbar { display: none; }
+#toolNav.can-up { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22px); mask-image: linear-gradient(to bottom, transparent, #000 22px); }
+#toolNav.can-down { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); }
+#toolNav.can-up.can-down { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22px, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(to bottom, transparent, #000 22px, #000 calc(100% - 22px), transparent); }
+@media (max-width: 640px) { #toolNav.can-up, #toolNav.can-down { -webkit-mask-image: none; mask-image: none; } }
+
+/* ----- logo：收合時點 logo 展開（滑過換成展開圖示）；展開時收合鈕在 logo 旁 ----- */
+.hub-brand-logo { border: 0; padding: 0; font: inherit; cursor: default; position: relative; }
+.hub-brand-logo > span { display: inline-grid; place-items: center; transition: opacity .15s ease, transform .2s ease; }
+.hub-brand-logo__open { position: absolute; inset: 0; opacity: 0; }
+@media (min-width: 961px) {
+  :root[data-hub-side=collapsed] .hub-side-toggle { display: none; }
+  :root[data-hub-side=collapsed] .hub-brand-logo { cursor: pointer; }
+  :root[data-hub-side=collapsed] .hub-brand-logo:is(:hover, :focus-visible) .hub-brand-logo__main { opacity: 0; transform: scale(.8); }
+  :root[data-hub-side=collapsed] .hub-brand-logo:is(:hover, :focus-visible) .hub-brand-logo__open { opacity: 1; }
+  :root[data-hub-side=collapsed] .hub-brand-logo:focus-visible { outline: none; box-shadow: var(--tb-focus); }
+}
+
+/* 設定：主題風格分兩組 */
+.hub-bg-group { margin-top: 2px; }
+
+/* 匯入本機工具：等待資料夾選擇視窗 */
+.hub-browse-wait { display: flex; align-items: center; justify-content: space-between; gap: var(--tb-space-3); }
+.hub-browse-wait[hidden] { display: none; }

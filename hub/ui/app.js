@@ -7,14 +7,15 @@ const els = {
   hubVersion: $('hubVersion'), hubInfo: $('hubInfo'),
   pageTool: $('pageTool'), pageSettings: $('pageSettings'), pageDash: $('pageDash'),
   dashGrid: $('dashGrid'), dashSummary: $('dashSummary'), dashRefresh: $('dashRefresh'),
-  dashActs: $('dashActs'), dashShutdown: $('dashShutdown'),
+  dashActs: $('dashActs'), dashShutdown: $('navShutdown'), btnStart: $('btnStart'), toolNote: $('toolNote'),
+  side: $('hubSide'), sideToggle: $('sideToggle'),
   toolName: $('toolName'), toolBadge: $('toolBadge'), toolStatus: $('toolStatus'),
   toolUpdate: $('toolUpdate'), hubUpdate: $('hubUpdate'),
   btnStop: $('btnStop'), btnReload: $('btnReload'), btnPopout: $('btnPopout'),
   frameBox: $('frameBox'), placeholder: $('placeholder'),
   phIcon: $('phIcon'), phTitle: $('phTitle'), phDesc: $('phDesc'), phMeta: $('phMeta'),
   phCallout: $('phCallout'), phHint: $('phHint'), phStart: $('phStart'),
-  swatches: $('swatches'), bgSeg: $('bgSeg'), strengthSeg: $('strengthSeg'), pySources: $('pySources'), pyManual: $('pyManual'), pyPath: $('pyPath'),
+  swatches: $('swatches'), bgSeg: $('bgSeg'), pySources: $('pySources'), pyManual: $('pyManual'), pyPath: $('pyPath'),
   pyCheck: $('pyCheck'), pyResult: $('pyResult'), pySaved: $('pySaved'), pySave: $('pySave'),
   toastArea: $('toastArea'), confirmBackdrop: $('confirmBackdrop'), confirmIcon: $('confirmIcon'),
   confirmTitle: $('confirmTitle'), confirmText: $('confirmText'), confirmOk: $('confirmOk'), confirmCancel: $('confirmCancel'),
@@ -23,7 +24,7 @@ const els = {
 const TOOL_ICONS = {
   'git-ref-manager': 'git-branch', 'agents-cfg-manager': 'package', 'key-manager': 'key',
   'build-runner': 'terminal', 'hlk-viewer': 'shield', 'script-editor': 'file-code',
-  'token-meter': 'layout-dashboard'
+  'token-meter': 'gauge'
 };
 const ACCENT_NAMES = { blue: '藍', green: '綠', violet: '紫', orange: '橘', rose: '玫瑰' };
 
@@ -50,7 +51,10 @@ const state = {
 
 function load(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
 function save(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* 只影響記憶 */ } }
-function icon(name, opts) { return window.TbIcons ? TbIcons.svg(name, opts || {}) : ''; }
+function icon(name, opts) {
+  if (window.HubIcons) return HubIcons.svg(name, opts || {});
+  return window.TbIcons ? TbIcons.svg(name, opts || {}) : '';
+}
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -92,15 +96,65 @@ function toast(kind, text, ms = 4200) {
   setTimeout(() => t.remove(), ms);
 }
 
+// 版本說明（GitHub Release 內文）轉成安全的 DOM：只支援標題、項目符號、編號、段落、
+// **粗體**、`程式碼`、[文字](網址) 與裸網址；全部用 textContent 建節點，不用 innerHTML，不會被注入。
+function mdInline(parent, text) {
+  const re = /(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))|(https?:\/\/[^\s<>()]+)/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) parent.append(document.createTextNode(text.slice(last, m.index)));
+    if (m[2]) parent.append(el('strong', '', m[2]));
+    else if (m[4]) parent.append(el('code', '', m[4]));
+    else {
+      const url = m[7] || m[8];
+      const a = el('a', '', m[6] || url);
+      a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      parent.append(a);
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) parent.append(document.createTextNode(text.slice(last)));
+}
+function mdRender(target, md) {
+  target.replaceChildren();
+  let list = null, para = null;
+  const flush = () => { list = null; para = null; };
+  for (const raw of String(md || '').replace(/\r/g, '').split('\n')) {
+    const line = raw.trimEnd();
+    let m;
+    if (!line.trim()) { flush(); continue; }
+    if ((m = line.match(/^\s*#{1,6}\s+(.*)$/))) { flush(); const h = el('div', 'hub-md__h'); mdInline(h, m[1]); target.append(h); continue; }
+    if ((m = line.match(/^\s*[-*+]\s+(.*)$/)) || (m = line.match(/^\s*\d+[.)]\s+(.*)$/))) {
+      const ordered = /^\s*\d/.test(line);
+      if (!list || list.tagName !== (ordered ? 'OL' : 'UL')) { para = null; list = el(ordered ? 'ol' : 'ul'); target.append(list); }
+      const li = el('li'); mdInline(li, m[1]); list.append(li); continue;
+    }
+    list = null;
+    if (!para) { para = el('p'); target.append(para); } else para.append(document.createTextNode(' '));
+    mdInline(para, line.trim());
+  }
+}
+
 function confirmDialog(title, text, options = {}) {
   if (!els.confirmBackdrop.classList.contains('tb-hidden') || $('installProgress').open) return Promise.resolve(false);
   return new Promise((resolve) => {
     const opener = document.activeElement; // 關閉後把焦點還回去
-    els.confirmIcon.innerHTML = icon('triangle-alert', { size: 22 });
+    // 標題圖示依情境上色：warn（停止、關閉）／danger（刪除、重設）／info（安裝等一般確認）
+    const tone = options.tone || (options.danger ? 'danger' : options.icon ? 'info' : 'warn');
+    els.confirmBackdrop.firstElementChild.dataset.tone = tone;
+    els.confirmIcon.innerHTML = icon(options.icon || (tone === 'info' ? 'info' : 'triangle-alert'), { size: 22, anim: 'pop' });
     els.confirmTitle.textContent = title;
     els.confirmText.textContent = text;
+    const notes = $('confirmNotes');
+    notes.classList.toggle('tb-hidden', !options.notes);
+    if (options.notes) mdRender(notes, options.notes); else notes.replaceChildren();
+    const link = $('confirmLink');
+    const linkOk = options.link && /^https:\/\/github\.com\//.test(options.link.url || '');
+    link.classList.toggle('tb-hidden', !linkOk);
+    link.onclick = linkOk ? () => window.open(options.link.url, '_blank', 'noopener,noreferrer') : null;
     els.confirmOk.textContent = options.label || '確定';
-    els.confirmOk.classList.toggle('tb-btn--danger', Boolean(options.danger) || !options.label);
+    els.confirmOk.classList.toggle('tb-btn--danger', tone !== 'info' || !options.label);
+    els.confirmOk.classList.toggle('tb-btn--primary', tone === 'info' && Boolean(options.label));
     els.confirmBackdrop.classList.remove('tb-hidden');
     els.confirmCancel.focus();
     const done = (val) => {
@@ -117,9 +171,11 @@ function confirmDialog(title, text, options = {}) {
     const backFn = (ev) => { if (ev.target === els.confirmBackdrop) done(false); };
     const keyFn = (ev) => {
       if (ev.key === 'Escape') { done(false); return; }
-      if (ev.key === 'Tab') { // 對話框只有兩個按鈕，Tab 在兩者間循環
+      if (ev.key === 'Tab') { // Tab 只在對話框看得到的按鈕之間循環
         ev.preventDefault();
-        (document.activeElement === els.confirmOk ? els.confirmCancel : els.confirmOk).focus();
+        const btns = [$('confirmLink'), els.confirmCancel, els.confirmOk].filter((b) => !b.classList.contains('tb-hidden'));
+        const i = btns.indexOf(document.activeElement);
+        btns[(i + (ev.shiftKey ? btns.length - 1 : 1)) % btns.length].focus();
       }
     };
     els.confirmOk.addEventListener('click', okFn);
@@ -136,6 +192,23 @@ function toolIcon(t) {
   return /^[a-z0-9][a-z0-9-]{0,39}$/.test(t.icon || '') ? t.icon
     : TOOL_ICONS[t.id] || (t.source === 'link' ? 'external-link' : 'square');
 }
+// 工具／連結的圖示：自訂（圖示名稱、emoji、上傳圖片）優先，否則用預設圖示
+function toolIconHtml(t, opts = {}) {
+  const c = t && t.customIcon;
+  const size = opts.size || 16;
+  if (c && c.kind === 'image' && /^\/api\/icon\?id=[a-z0-9-]+&v=\d+$/.test(c.value)) {
+    return `<img class="hub-custom-icon" src="${c.value}" width="${size}" height="${size}" alt="" draggable="false">`;
+  }
+  if (c && c.kind === 'emoji' && c.value) {
+    const s = el('span', 'hub-emoji-icon', c.value);
+    s.style.fontSize = Math.round(size * 0.95) + 'px';
+    s.setAttribute('aria-hidden', 'true');
+    return s.outerHTML;
+  }
+  if (c && c.kind === 'name' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(c.value)) return icon(c.value, opts);
+  return icon(toolIcon(t), opts);
+}
+
 function toolState(t) {
   if (state.busy[t.id]) return 'busy';
   if (!t.installed) return 'missing';
@@ -154,7 +227,7 @@ function stateLabel(t) {
   if (s === 'missing') return t.error || '未安裝';
   if (s === 'running') {
     const r = t.running;
-    return `v${t.version} · 127.0.0.1:${r.port} · pid ${r.pid}${r.managed ? '' : '（非 Hub 啟動）'}`;
+    return `v${t.version} · 127.0.0.1:${r.port} · pid ${r.pid}${r.managed ? '' : '（外部啟動）'}`;
   }
   return t.web ? `v${t.version}` : `v${t.version} · 只有 CLI`;
 }
@@ -174,17 +247,64 @@ function createFrame(t) {
   frame.title = t.name || '工具畫面';
   frame.setAttribute('referrerpolicy', 'no-referrer');
   const origin = new URL(t.running.url).origin;
+  const rec = { panel, frame, url: t.running.url, src: '', origin, loaded: false, timer: 0 };
   frame.addEventListener('load', () => {
+    rec.loaded = true;
+    clearTimeout(rec.timer);
     const th = TbTheme.get();
     try { frame.contentWindow.postMessage({ type: 'tb-theme', mode: th.mode, accent: th.accent }, origin); } catch (_) { /* 尚未載入 */ }
   });
-  const src = `${t.running.url}/?${TbTheme.query()}&embedded=1`;
-  frame.src = src;
+  rec.src = `${t.running.url}/?${TbTheme.query()}&embedded=1`;
   panel.appendChild(frame);
+  // 載入失敗時的說明卡（嵌入被工具拒絕、或太久沒有回應）
+  const fail = el('div', 'hub-frame-fail tb-hidden');
+  panel.appendChild(fail);
+  rec.fail = fail;
   els.frameBox.appendChild(panel);
-  const rec = { panel, frame, url: t.running.url, src, origin };
   frames.set(t.id, rec);
+  loadFrame(t, rec);
   return rec;
+}
+
+function showFrameFail(t, rec, title, reason) {
+  const card = el('div', 'tb-card hub-frame-fail__card');
+  const head = el('div', 'tb-card__head');
+  const ic = el('span', 'tb-card__icon');
+  ic.innerHTML = icon('triangle-alert', { size: 20 });
+  const txt = el('div');
+  txt.append(el('h2', 'tb-card__title', title), el('div', 'tb-muted tb-small', reason));
+  head.append(ic, txt);
+  const acts = el('div', 'tb-row');
+  const pop = el('button', 'tb-btn tb-btn--primary');
+  pop.type = 'button';
+  pop.innerHTML = icon('external-link', { anim: 'nudge' }) + '在新視窗開啟';
+  pop.addEventListener('click', () => window.open(`${rec.url}/?${TbTheme.query()}`, '_blank', 'noopener'));
+  const again = el('button', 'tb-btn');
+  again.type = 'button';
+  again.innerHTML = icon('refresh-cw', { anim: 'spin' }) + '重新載入';
+  again.addEventListener('click', () => loadFrame(t, rec));
+  acts.append(pop, again);
+  card.append(head, acts);
+  rec.fail.replaceChildren(card);
+  rec.fail.classList.remove('tb-hidden');
+  rec.frame.classList.add('tb-hidden');
+}
+
+// 先問 Hub 工具允不允許被嵌入（不允許時瀏覽器只會顯示禁止圖示），再載入；
+// 10 秒內沒有載入完成也顯示說明卡。
+async function loadFrame(t, rec) {
+  rec.fail.classList.add('tb-hidden');
+  rec.frame.classList.remove('tb-hidden');
+  rec.loaded = false;
+  clearTimeout(rec.timer);
+  try {
+    const r = await apiPost('/api/tools/embed-check', { id: t.id });
+    if (!r.embeddable) { showFrameFail(t, rec, '這個工具不能嵌在 Hub 裡顯示', r.reason); return; }
+  } catch (_) { /* 檢查失敗就直接載入 */ }
+  rec.timer = setTimeout(() => {
+    if (!rec.loaded) showFrameFail(t, rec, '工具畫面沒有回應', '10 秒內沒有載入完成。可以在新視窗開啟，或重新載入一次。');
+  }, 10000);
+  rec.frame.src = rec.src;
 }
 
 function destroyFrame(id) {
@@ -225,9 +345,9 @@ function renderNav() {
     a.href = `?tool=${encodeURIComponent(t.id)}`;
     if (state.page === 'tool' && t.id === state.selected) a.setAttribute('aria-current', 'page');
     a.title = `${t.name}｜${stateLabel(t)}`;
-    a.innerHTML = icon(toolIcon(t), { anim: 'pop' });
+    a.innerHTML = toolIconHtml(t, { anim: 'pop' });
     a.appendChild(el('span', 'tb-nav__label', t.name));
-    const dot = el('span', `${DOT[s]} hub-nav__dot`);
+    const dot = el('span', `${DOT[s]} hub-nav__dot${s === 'running' && !t.running.managed ? ' hub-dot--external' : ''}`);
     dot.setAttribute('aria-hidden', 'true');
     a.appendChild(dot);
     a.addEventListener('click', (ev) => { ev.preventDefault(); if (t.url) openLink(t); else select(t.id); });
@@ -239,6 +359,13 @@ function renderNav() {
   else els.navSettings.removeAttribute('aria-current');
   if (state.page === 'manage') $('navManage').setAttribute('aria-current', 'page');
   else $('navManage').removeAttribute('aria-current');
+  // 窄版頂部列會橫向捲動：換頁時把目前的項目捲進畫面（輪詢重畫時不動，避免畫面跳）
+  const cur = state.page + ':' + (state.page === 'tool' ? state.selected : '') + ':' + els.nav.children.length;
+  if (cur !== renderNav.last) {
+    renderNav.last = cur;
+    const item = els.side.querySelector('[aria-current="page"]');
+    if (item && els.side.scrollWidth > els.side.clientWidth) item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 }
 
 function kv(rows) {
@@ -253,7 +380,7 @@ function kv(rows) {
 function renderPlaceholder(title, desc, iconName, hint) {
   els.frameBox.classList.add('tb-hidden');
   els.placeholder.classList.remove('tb-hidden');
-  els.phIcon.innerHTML = icon(iconName, { size: 20 });
+  els.phIcon.innerHTML = String(iconName).startsWith('<') ? iconName : icon(iconName, { size: 20 });
   els.phTitle.textContent = title;
   els.phDesc.textContent = desc || '';
   els.phHint.textContent = hint || '';
@@ -267,7 +394,8 @@ function renderTool() {
     els.toolName.textContent = 'Dev-Toolbox';
     els.toolBadge.className = 'tb-hidden';
     els.toolStatus.textContent = '';
-    [els.btnStop, els.btnReload, els.btnPopout].forEach((b) => { b.disabled = true; });
+    [els.btnStart, els.btnStop, els.btnReload, els.btnPopout].forEach((b) => b.classList.add('tb-hidden'));
+    els.toolNote.classList.add('tb-hidden');
     els.phMeta.innerHTML = '';
     els.phStart.classList.add('tb-hidden');
     renderPlaceholder('請選擇工具', '從側邊欄開啟工具，或到「管理工具」新增。', 'layout-dashboard', '');
@@ -278,18 +406,24 @@ function renderTool() {
   els.toolName.textContent = t.name;
   els.toolBadge.className = BADGE[s][0];
   els.toolBadge.textContent = BADGE[s][1];
-  els.toolStatus.textContent = stateLabel(t);
+  els.toolStatus.textContent = stateLabel(t).replace('（外部啟動）', '');   // 外部啟動另有標籤與說明
 
-  const canStart = s === 'stopped' && (t.web || t.cli);
-  // 右上不放啟動钮（入口是佔位頁的「啟動這個工具」）；停止钮只在啟動後
-  // （含啟動中/停止中，便于顯示 spinner）才顯示。
-  const showActions = s === 'running' || s === 'busy';
-  els.btnStop.classList.toggle('tb-hidden', !showActions);
-  els.btnStop.disabled = s !== 'running' || !t.running.managed;
-  els.btnReload.disabled = s !== 'running';
-  els.btnPopout.disabled = s !== 'running';
-  els.btnStop.classList.toggle('is-busy', state.busy[t.id] === 'stop');
-  els.btnStop.title = t.running && !t.running.managed ? '這個服務不是由 Hub 啟動，無法在這裡停止' : '';
+  const canStart = s === 'stopped' && (t.web || t.cli) && t.installed;
+  // 未啟動：只顯示「啟動」；執行中：停止（外部啟動的不能停，不顯示）、重新載入、新視窗；
+  // 啟動中／停止中：保留對應按鈕顯示轉圈。用不到的按鈕直接隱藏，不顯示成灰色。
+  const busy = state.busy[t.id];
+  const external = s === 'running' && !t.running.managed;
+  els.btnStart.classList.toggle('tb-hidden', !(canStart || busy === 'start'));
+  els.btnStart.disabled = !canStart;
+  els.btnStart.classList.toggle('is-busy', busy === 'start');
+  els.btnStop.classList.toggle('tb-hidden', !(s === 'running' || busy === 'stop'));
+  els.btnStop.disabled = s !== 'running';
+  els.btnStop.classList.toggle('is-busy', busy === 'stop');
+  els.btnReload.classList.toggle('tb-hidden', s !== 'running');
+  els.btnPopout.classList.toggle('tb-hidden', s !== 'running');
+  els.toolNote.classList.add('tb-hidden');
+  els.btnStop.title = external ? '外部啟動的工具：Hub 會先請它自己關閉' : '';
+  els.toolBadge.textContent = external ? '外部啟動' : BADGE[s][1];
 
   if (s === 'running') {
     els.placeholder.classList.add('tb-hidden');
@@ -305,7 +439,7 @@ function renderTool() {
   if (!t.installed) hint = `${t.error || '未安裝'}。請執行 Setup.bat。`;
   else if (!t.web && t.cli) hint = '開啟後會在新的終端機視窗執行。';
   else if (state.lastError[t.id]) hint = `上次啟動失敗：${state.lastError[t.id]}`;
-  renderPlaceholder(t.name, t.desc || '', toolIcon(t), hint);
+  renderPlaceholder(t.name, t.desc || '', toolIconHtml(t, { size: 20 }), hint);
   els.phStart.classList.toggle('tb-hidden', !(t.web || t.cli) || !t.installed);
   els.phStart.disabled = !canStart;
   els.phStart.classList.toggle('is-busy', state.busy[t.id] === 'start');
@@ -348,16 +482,14 @@ function renderDash() {
   state.dashFp = fp;
 
   els.dashGrid.innerHTML = '';
+  const linksBox = $('dashLinks');
+  linksBox.innerHTML = '';
   $('dashEmpty').classList.toggle('tb-hidden', visibleTools().length > 0);
+  const links = visibleTools().filter((t) => t.url);
+  $('dashLinksHead').classList.toggle('tb-hidden', !links.length);
+  for (const t of links) linksBox.appendChild(linkCard(t));
   for (const t of visibleTools()) {
-    if (t.url) {
-      const link = el('article', 'tb-card hub-library-row');
-      const text = el('div', 'hub-library-info');
-      text.append(el('strong', '', t.name), el('div', 'tb-muted', t.desc || t.url));
-      link.append(text, libraryButton('開啟', () => openLink(t)));
-      els.dashGrid.appendChild(link);
-      continue;
-    }
+    if (t.url) continue;
     const s = toolState(t);
     const busy = state.busy[t.id];
     const card = el('article', 'tb-card tb-card--interactive hub-tool-card');
@@ -366,10 +498,10 @@ function renderDash() {
 
     const top = el('div', 'hub-tool-card__top');
     const ic = el('span', 'tb-card__icon');
-    ic.innerHTML = icon(toolIcon(t));
+    ic.innerHTML = toolIconHtml(t, { anim: 'pop' });
     top.appendChild(ic);
     top.appendChild(el('span', 'hub-tool-card__name', t.name));
-    top.appendChild(el('span', DOT[s]));   // 右上狀態點：綠／藍 pulse／灰／紅（ui-kit tb-dot）
+    top.appendChild(el('span', DOT[s] + (s === 'running' && !t.running.managed ? ' hub-dot--external' : '')));   // 右上狀態點：綠／藍 pulse／灰／紅（ui-kit tb-dot）；外部啟動為空心
     card.appendChild(top);
 
     let stateText = BADGE[s][1];
@@ -377,7 +509,7 @@ function renderDash() {
     card.appendChild(el('div', 'hub-tool-card__state', stateText));
 
     let sub;
-    if (s === 'running') sub = `127.0.0.1:${t.running.port} · v${t.version}${t.running.managed ? '' : ' · 非 Hub 啟動'}`;
+    if (s === 'running') sub = `127.0.0.1:${t.running.port} · v${t.version}${t.running.managed ? '' : ' · 外部啟動'}`;
     else if (s === 'busy') sub = t.version ? `v${t.version}` : '';
     else if (s === 'missing') sub = t.error || '未安裝';
     else sub = [t.runtimeDetail, t.version ? `v${t.version}` : ''].filter(Boolean).join(' · ');
@@ -401,9 +533,9 @@ function renderDash() {
       if (s === 'running' || busy === 'stop') {
         const pb = el('button', 'tb-btn tb-btn--icon tb-btn--danger');
         pb.type = 'button';
-        pb.title = (t.running && !t.running.managed) ? '這個服務不是由 Hub 啟動，無法在這裡停止' : '停止';
+        pb.title = (t.running && !t.running.managed) ? '停止（外部啟動的工具）' : '停止';
         pb.innerHTML = icon('square', { anim: 'pop' });
-        pb.disabled = s !== 'running' || !t.running.managed;
+        pb.disabled = s !== 'running';
         pb.classList.toggle('is-busy', busy === 'stop');
         pb.addEventListener('click', (ev) => { ev.stopPropagation(); stopTool(t.id); });
         acts.appendChild(pb);
@@ -429,6 +561,28 @@ function renderDash() {
     els.dashGrid.appendChild(card);
   }
   renderActivity();
+}
+
+// 網站連結卡：與工具卡同版型（圖示＋名稱、「網站連結」、網域），整張可點、開新分頁
+function linkCard(t) {
+  const card = el('article', 'tb-card tb-card--interactive hub-tool-card hub-link-card');
+  card.tabIndex = 0;
+  card.setAttribute('role', 'link');
+  const top = el('div', 'hub-tool-card__top');
+  const ic = el('span', 'tb-card__icon');
+  ic.innerHTML = toolIconHtml(t, { anim: 'pop' });
+  const mark = el('span', 'hub-link-card__mark');
+  mark.innerHTML = icon('external-link', { size: 14, anim: 'nudge' });
+  mark.title = '在新分頁開啟';
+  top.append(ic, el('span', 'hub-tool-card__name', t.name), mark);
+  let host = '';
+  try { host = new URL(t.url).host.replace(/^www\./, ''); } catch (_) { host = t.url; }
+  card.append(top, el('div', 'hub-tool-card__state hub-link-card__kind', '網站連結'),
+    el('div', 'tb-muted tb-small hub-tool-card__sub', [host, t.desc].filter(Boolean).join(' · ')));
+  card.title = t.url;
+  card.addEventListener('click', () => openLink(t));
+  card.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') openLink(t); });
+  return card;
 }
 
 // ---------- 最近的工作（/api/activity：Hub 讀各工具 history.jsonl 聚合）----------
@@ -555,7 +709,7 @@ async function refresh() {
 
 async function shutdownHub() {
   if (els.dashShutdown.disabled) return;
-  const ok = await confirmDialog('關閉 HUB', '確定要關閉 Dev-Toolbox Hub？由 Hub 啟動的工具也會停止，進行中的工作會被中斷。');
+  const ok = await confirmDialog('關閉 HUB', '確定要關閉 Dev-Toolbox Hub？由 Hub 啟動的工具也會停止，進行中的工作會被中斷。', { label: '關閉 HUB', tone: 'warn' });
   if (!ok) return;
   els.dashShutdown.disabled = true;
   try {
@@ -571,6 +725,7 @@ async function shutdownHub() {
   state.tools = [];
   els.dashRefresh.disabled = true;
   els.navSettings.classList.add('tb-hidden');
+  els.dashShutdown.classList.add('tb-hidden');
   openDash();
   toast('ok', 'Hub 已關閉');
 }
@@ -594,7 +749,11 @@ async function startTool(id) {
 
 async function stopTool(id) {
   if (!id || state.busy[id]) return;
-  const ok = await confirmDialog('停止工具', `確定要停止「${(toolById(id) || {}).name}」？進行中的工作會被中斷。`);
+  const t = toolById(id) || {};
+  const external = t.running && !t.running.managed;
+  const ok = await confirmDialog(external ? '停止外部啟動的工具' : '停止工具', external
+    ? `「${t.name}」是外部啟動的工具（不是由 Hub 開的）。Hub 會先請它自己關閉；沒有回應時，確認在聽 port ${t.running.port} 的行程確實是這個工具，才結束它的行程（pid ${t.running.pid}）。進行中的工作會被中斷。`
+    : `確定要停止「${t.name}」？進行中的工作會被中斷。`, { label: '停止', tone: 'warn' });
   if (!ok) return;
   state.busy[id] = 'stop';
   renderAll();
@@ -679,9 +838,9 @@ async function applyUpdate(tool) {
     packageDetails(update),
     isHub ? 'Hub 會重新啟動，由 Hub 啟動的工具也會停止。'
       : running ? '工具會重新啟動，進行中的工作會被中斷。' : '',
-    update.notes,
   ].filter(Boolean).join('\n\n');
-  if (!await confirmDialog('下載並安裝更新', details, { label: '下載並安裝' })) return;
+  if (!await confirmDialog('下載並安裝更新', details, { label: '下載並安裝', icon: 'download', notes: update.notes,
+    link: update.page ? { url: update.page } : null })) return;
   state.busy[id] = 'update';
   renderAll();
   try {
@@ -722,7 +881,6 @@ function syncThemeControls() {
   els.swatches.querySelectorAll('.tb-swatch').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.accent === t.accent)));
   renderThemeBtn();
   syncBgControls();
-  syncStrengthControls();
 }
 document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => TbTheme.set(b.dataset.mode)));
 document.addEventListener('tb-theme-change', () => { syncThemeControls(); postThemeToFrames(); });
@@ -732,7 +890,7 @@ const THEME_NEXT = { light: 'dark', dark: 'system', system: 'light' };
 const THEME_META = { light: ['sun', '淺色'], dark: ['moon', '深色'], system: ['monitor', '跟隨系統'] };
 function renderThemeBtn() {
   const [ic, label] = THEME_META[TbTheme.get().mode] || THEME_META.system;
-  els.navTheme.innerHTML = icon(ic) + `<span class="tb-nav__label">${label}</span>`;
+  els.navTheme.innerHTML = icon(ic, { anim: ic === 'sun' ? 'spin' : ic === 'moon' ? 'wiggle' : 'pop' }) + `<span class="tb-nav__label">主題：${label}</span>`;
   els.navTheme.title = `目前主題：${label}（點擊切換：淺色 → 深色 → 跟隨系統）`;
 }
 els.navTheme.addEventListener('click', (ev) => {
@@ -741,7 +899,8 @@ els.navTheme.addEventListener('click', (ev) => {
 });
 
 // ---------- 主題風格（僅 Hub 整體色調，localStorage hub.bg；hub-bg.js 繪製前先套） ----------
-const BG_NAMES = { plain: '純色', glow: '光暈', grid: '網格', dots: '點陣', dusk: '暮色', forest: '森林', mono: '黑白', cyber: '霓虹' };
+const BG_NAMES = { graphite: '石墨', warm: '暖灰', nord: '冷灰藍', contrast: '高對比', black: '純黑', plain: '經典',
+  glass: '液態玻璃', frost: '磨砂', metal: '金屬', pearl: '珠光', glow: '光暈', grid: '網格', dots: '點陣', dusk: '暮色', forest: '森林', mono: '黑白', cyber: '霓虹' };
 function setBg(v) {
   if (!BG_NAMES[v]) return;
   save('hub.bg', v);
@@ -755,19 +914,6 @@ function syncBgControls() {
 }
 els.bgSeg.querySelectorAll('[data-bg]').forEach((b) => b.addEventListener('click', () => setBg(b.dataset.bg)));
 
-// ---------- 風格強度（bold 明顯／soft 內斂，localStorage hub.bgStrength） ----------
-const STRENGTH_NAMES = { bold: '明顯', soft: '內斂' };
-function setStrength(v) {
-  if (!STRENGTH_NAMES[v]) return;
-  save('hub.bgStrength', v);
-  document.documentElement.dataset.hubStrength = v;
-  syncStrengthControls();
-}
-function syncStrengthControls() {
-  const cur = document.documentElement.dataset.hubStrength || 'bold';
-  els.strengthSeg.querySelectorAll('[data-strength]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.strength === cur)));
-}
-els.strengthSeg.querySelectorAll('[data-strength]').forEach((b) => b.addEventListener('click', () => setStrength(b.dataset.strength)));
 
 // ---------- 設定：Python ----------
 function pyMode() {
@@ -788,7 +934,9 @@ function pyRow(iconName, title, sub, badge) {
   row.innerHTML = icon(iconName, { size: 16 });
   const main = el('div', 'tb-list__main');
   main.appendChild(el('div', 'tb-list__title', title));
-  main.appendChild(el('div', 'tb-list__sub tb-mono', sub));
+  const subEl = el('div', 'tb-list__sub tb-mono hub-py-path', sub);
+  subEl.title = sub;   // 滑過看完整路徑；可以選取複製
+  main.appendChild(subEl);
   row.appendChild(main);
   if (badge) row.appendChild(el('span', 'tb-badge tb-badge--accent', badge));
   return row;
@@ -906,6 +1054,7 @@ function renderLibrary() {
   const fingerprint = JSON.stringify([state.loaded, rows, state.busy]);
   if (fingerprint === libraryFingerprint) return;
   libraryFingerprint = fingerprint;
+  closeMoreMenu();   // 清單要重建：開著的「⋯」選單對應的按鈕會被換掉
   const list = $('libraryList');
   const focusKey = list.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
   const fragment = document.createDocumentFragment();
@@ -921,22 +1070,27 @@ function renderLibrary() {
     for (const t of tools) {
       const row = el('article', 'tb-card hub-library-row');
       const glyph = el('span', 'hub-library-icon');
-      glyph.innerHTML = icon(toolIcon(t));
+      glyph.innerHTML = toolIconHtml(t, { size: 18, anim: 'pop' });
       glyph.setAttribute('aria-hidden', 'true');
       const info = el('div', 'hub-library-info');
       const category = { import: '本機匯入', link: '網站連結', catalog: '官方工具', managed: '官方工具', bundled: '本機工具' }[t.source];
       info.append(el('strong', '', t.name), el('div', 'tb-muted', [category, t.version && 'v' + t.version].filter(Boolean).join(' · ')));
       if (t.error && t.source !== 'catalog') info.append(el('div', 'hub-library-error', t.error));
       if (t.desc || t.path || t.url) info.append(el('div', 'tb-muted', [t.desc, t.path || t.url].filter(Boolean).join(' · ')));
-      const actions = el('div', 'hub-library-actions');
+      // 每列固定三格：[主要操作] [顯示在 Hub] [⋯ 更多]，上下對齊；用不到的格子留空
+      const actions = el('div', 'hub-library-actions hub-library-actions--row');
+      const slotMain = el('div', 'hub-lib-slot hub-lib-slot--main');
+      const slotToggle = el('div', 'hub-lib-slot hub-lib-slot--toggle');
+      const slotMore = el('div', 'hub-lib-slot hub-lib-slot--more');
+      const more = [];   // [label, iconName, action, danger]
       if (t.source === 'catalog') {
         const install = libraryButton(state.busy[t.id] ? '處理中…' : '安裝', () => installTool(t), true);
         install.disabled = Boolean(state.busy[t.id]);
         install.dataset.focusKey = t.id + ':install';
-        actions.append(install);
+        slotMain.append(install);
       } else {
-        if (t.url) actions.append(libraryButton('開啟', () => openLink(t)), libraryButton('編輯', () => showLibraryDialog('link', t)));
-        else if (t.installed && (t.web || t.cli) && !t.hidden) actions.append(libraryButton('開啟', () => select(t.id)));
+        if (t.url) slotMain.append(libraryButton('開啟', () => openLink(t)));
+        else if (t.installed && (t.web || t.cli) && !t.hidden) slotMain.append(libraryButton('開啟', () => select(t.id)));
         const label = el('label', 'tb-switch');
         const toggle = el('input');
         toggle.type = 'checkbox';
@@ -945,19 +1099,23 @@ function renderLibrary() {
         toggle.disabled = Boolean(state.busy[t.id]);
         toggle.dataset.focusKey = t.id + ':visibility';
         toggle.setAttribute('aria-label', '在 Hub 顯示 ' + t.name);
-        toggle.addEventListener('change', () => changeLibrary(t, { action: 'visibility', id: t.id, hidden: !toggle.checked }));
+        toggle.addEventListener('change', () => setVisibility(t.id, toggle.checked));
         label.append(toggle, el('span', '', '顯示在 Hub'));
-        actions.append(label);
+        slotToggle.append(label);
+        if (t.url) more.push(['編輯', 'pencil', () => showLibraryDialog('link', t), false]);
+        if (t.installed || t.url) more.unshift(['更換圖示', 'image', () => openIconDialog(t), false]);
         if (t.source === 'link' || t.source === 'import') {
-          actions.append(libraryButton('移除', async () => {
-            if (await confirmDialog('移除 ' + t.name, '將這個項目從 Hub 移除。', { label: '移除' })) {
+          more.push(['移除', 'trash-2', async () => {
+            if (await confirmDialog('移除 ' + t.name, '將這個項目從 Hub 移除。', { label: '移除', danger: true })) {
               await changeLibrary(t, { action: 'remove', id: t.id });
             }
-          }));
+          }, true]);
         }
       }
-      if (t.source === 'managed') actions.append(libraryButton('解除安裝', () => confirmToolCleanup(t, 'uninstall')));
-      if (t.dataPath) actions.append(libraryButton('清除資料', () => confirmToolCleanup(t, 'clearData')));
+      if (t.source === 'managed') more.push(['解除安裝', 'circle-x', () => confirmToolCleanup(t, 'uninstall'), true]);
+      if (t.dataPath) more.push(['清除資料', 'trash-2', () => confirmToolCleanup(t, 'clearData'), true]);
+      if (more.length) slotMore.append(moreMenu(t, more));
+      actions.append(slotMain, slotToggle, slotMore);
       row.append(glyph, info, actions);
       section.append(row);
     }
@@ -965,6 +1123,75 @@ function renderLibrary() {
   }
   list.replaceChildren(fragment);
   if (focusKey) Array.from(list.querySelectorAll('[data-focus-key]')).find((node) => node.dataset.focusKey === focusKey)?.focus();
+}
+
+// 「顯示在 Hub」：先在畫面上切換（側欄、總覽立即跟著變），背景送出；失敗才還原。
+// 不經過 busy 狀態，開關不會先跳回原位再等 Hub 回應。
+async function setVisibility(id, visible) {
+  const t = state.tools.find((x) => x.id === id);
+  if (!t) return;
+  const before = t.hidden;
+  t.hidden = !visible;
+  renderAll();
+  try {
+    await apiPost('/api/tools/library', { action: 'visibility', id, hidden: !visible });
+  } catch (err) {
+    t.hidden = before;
+    renderAll();
+    toast('danger', err.message);
+  }
+}
+
+// 「⋯」更多操作選單：點開／Esc／點外面關閉；危險項目紅色（執行前仍會確認）
+let openMenu = null;
+function closeMoreMenu() {
+  if (!openMenu) return;
+  openMenu.menu.remove();
+  openMenu.button.setAttribute('aria-expanded', 'false');
+  openMenu = null;
+}
+document.addEventListener('click', (ev) => { if (openMenu && !openMenu.menu.contains(ev.target) && ev.target !== openMenu.button && !openMenu.button.contains(ev.target)) closeMoreMenu(); });
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && openMenu) { const b = openMenu.button; closeMoreMenu(); b.focus(); } });
+window.addEventListener('resize', closeMoreMenu);
+document.addEventListener('scroll', closeMoreMenu, true);
+
+function moreMenu(t, items) {
+  const b = el('button', 'tb-btn tb-btn--icon');
+  b.type = 'button';
+  b.title = '更多操作';
+  b.setAttribute('aria-label', t.name + ' 的更多操作');
+  b.setAttribute('aria-haspopup', 'menu');
+  b.setAttribute('aria-expanded', 'false');
+  b.dataset.focusKey = t.id + ':more';
+  b.innerHTML = icon('ellipsis', { anim: 'pop' });
+  b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const wasMine = openMenu && openMenu.button === b;
+    closeMoreMenu();
+    if (wasMine) return;
+    const menu = el('div', 'hub-menu');
+    menu.setAttribute('role', 'menu');
+    for (const [label, ic, action, danger] of items) {
+      const it = el('button', 'hub-menu__item' + (danger ? ' hub-menu__item--danger' : ''));
+      it.type = 'button';
+      it.setAttribute('role', 'menuitem');
+      it.innerHTML = icon(ic, { anim: 'pop' });
+      it.append(el('span', '', label));
+      it.addEventListener('click', () => { closeMoreMenu(); action(); });
+      menu.append(it);
+    }
+    document.body.append(menu);
+    const r = b.getBoundingClientRect();
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    const left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8));
+    const top = (r.bottom + 6 + h > innerHeight - 8) ? r.top - h - 6 : r.bottom + 6;
+    menu.style.left = left + 'px';
+    menu.style.top = Math.max(8, top) + 'px';
+    b.setAttribute('aria-expanded', 'true');
+    openMenu = { menu, button: b };
+    menu.querySelector('.hub-menu__item').focus();
+  });
+  return b;
 }
 
 async function changeLibrary(t, body) {
@@ -1008,7 +1235,8 @@ async function installTool(t) {
   try {
     const { update, message } = await apiPost('/api/tools/update/check', { id: t.id });
     if (!update) { toast('warn', message || '目前沒有相容的安裝套件。', 7000); return; }
-    if (!await confirmDialog('安裝 ' + t.name, ['v' + update.version, packageDetails(update), update.notes].filter(Boolean).join('\n\n'), { label: '下載並安裝' })) return;
+    if (!await confirmDialog('安裝 ' + t.name, ['v' + update.version, packageDetails(update)].filter(Boolean).join(' · '),
+      { label: '下載並安裝', icon: 'download', notes: update.notes, link: update.page ? { url: update.page } : null })) return;
     await downloadAndInstall(t.name, { id: t.id, version: update.version, restart: false });
     toast('ok', t.name + ' 已安裝。');
   } catch (err) { toast('danger', '安裝失敗：' + err.message, 7000); }
@@ -1020,6 +1248,7 @@ function showLibraryDialog(mode, t = null) {
   editingLink = t;
   $('libraryForm').reset();
   $('libraryBrowse').disabled = $('librarySave').disabled = false;
+  setBrowseWait(false);
   $('libraryTitle').textContent = mode === 'import' ? '匯入本機工具' : t ? '編輯網站連結' : '新增網站連結';
   $('importFields').hidden = mode !== 'import';
   $('linkFields').hidden = mode !== 'link';
@@ -1028,7 +1257,6 @@ function showLibraryDialog(mode, t = null) {
   $('libraryName').value = t?.name || '';
   $('libraryUrl').value = t?.url || '';
   $('libraryDescription').value = t?.desc || '';
-  $('libraryIcon').value = t?.icon || '';
   $('libraryError').textContent = '';
   $('libraryDialog').showModal();
   $(mode === 'import' ? 'libraryPath' : 'libraryName').focus();
@@ -1039,20 +1267,32 @@ $('navManage').addEventListener('click', (ev) => {
 });
 $('importTool').addEventListener('click', () => showLibraryDialog('import'));
 $('addLink').addEventListener('click', () => showLibraryDialog('link'));
-$('libraryCancel').addEventListener('click', () => $('libraryDialog').close());
+let browsing = false;
+function cancelBrowse() {
+  if (browsing) apiPost('/api/tools/folder/cancel', {}).catch(() => {});
+}
+function setBrowseWait(on, text) {
+  $('libraryBrowseWait').hidden = !on;
+  if (text) $('libraryBrowseWaitText').textContent = text;
+}
+$('libraryCancel').addEventListener('click', () => { cancelBrowse(); $('libraryDialog').close(); });
+$('libraryDialog').addEventListener('close', () => { cancelBrowse(); setBrowseWait(false); });
+$('libraryBrowseCancel').addEventListener('click', cancelBrowse);
 $('libraryBrowse').addEventListener('click', async () => {
   const session = libraryDialogSession;
   const b = $('libraryBrowse');
   b.disabled = true;
-  $('librarySave').disabled = true;
+  browsing = true;
   $('libraryError').textContent = '';
+  setBrowseWait(true, '資料夾選擇視窗已開啟，請在該視窗選擇資料夾（可能在其他視窗後面）。');
   try {
     const { path } = await apiPost('/api/tools/folder', {});
     if (path && isCurrentLibraryDialog(session)) $('libraryPath').value = path;
   } catch (err) {
     if (isCurrentLibraryDialog(session)) $('libraryError').textContent = err.message;
   } finally {
-    if (isCurrentLibraryDialog(session)) b.disabled = $('librarySave').disabled = false;
+    browsing = false;
+    if (isCurrentLibraryDialog(session)) { b.disabled = false; setBrowseWait(false); }
   }
 });
 $('libraryForm').addEventListener('submit', async (ev) => {
@@ -1063,7 +1303,7 @@ $('libraryForm').addEventListener('submit', async (ev) => {
   const body = $('linkFields').hidden
     ? { action: 'import', path: $('libraryPath').value }
     : { action: 'link', id: editingLink?.id, name: $('libraryName').value, url: $('libraryUrl').value,
-      description: $('libraryDescription').value, icon: $('libraryIcon').value };
+      description: $('libraryDescription').value, icon: editingLink?.icon || '' };
   b.disabled = true;
   $('libraryError').textContent = '';
   try {
@@ -1077,12 +1317,163 @@ $('libraryForm').addEventListener('submit', async (ev) => {
   }
 });
 
+// ---------- 自訂圖示挑選器 ----------
+// 圖示清單：ui-kit 與 Hub 額外圖示中適合當工具圖示的（排除箭頭、勾叉這類介面用圖示）
+const ICON_SKIP = new Set(['chevron-up', 'chevron-down', 'chevron-right', 'x', 'check', 'circle-check', 'circle-x', 'loader', 'menu',
+  'plus', 'eye', 'copy', 'save', 'refresh-cw', 'square', 'play', 'circle', 'circle-help', 'triangle-alert', 'info', 'search',
+  'panel-left-close', 'panel-left-open', 'ellipsis', 'upload', 'power', 'trash-2', 'sun', 'moon', 'monitor', 'signature', 'user']);
+// 中文搜尋關鍵字
+const ICON_TAGS = {
+  'database': '資料庫 db', 'cloud': '雲端', 'file-text': '文件 檔案', 'file-code': '程式碼 檔案', 'chart-bar': '圖表 統計 長條',
+  'chart-line': '圖表 趨勢 折線', 'activity': '監控 心跳', 'mail': '郵件 信箱', 'calendar': '日曆 行事曆', 'clock': '時間 時鐘',
+  'message-square': '聊天 訊息', 'users': '使用者 團隊 成員', 'video': '影片 視訊', 'video-play': '影片 youtube 播放', 'music': '音樂',
+  'camera': '相機 照片', 'server': '伺服器 主機', 'cpu': '晶片 處理器 硬體', 'network': '網路 拓撲', 'wifi': '無線 網路',
+  'printer': '印表機 列印', 'code': '程式碼 開發', 'bug': '除錯 錯誤', 'bot': '機器人 ai', 'wrench': '工具 維修 扳手',
+  'puzzle': '外掛 拼圖', 'flask': '實驗 測試', 'rocket': '火箭 部署 發布', 'zap': '閃電 快速', 'house': '首頁 家', 'briefcase': '工作 公事包',
+  'book-open': '書 文件 說明', 'notebook': '筆記', 'newspaper': '新聞', 'clipboard-list': '清單 待辦', 'archive': '封存 備份',
+  'table': '表格 試算表', 'layout-grid': '格狀 看板', 'lock': '鎖 安全 密碼', 'map': '地圖', 'shopping-cart': '購物',
+  'gamepad': '遊戲', 'palette': '調色盤 設計', 'star': '星號 收藏', 'heart': '愛心 喜歡', 'tag': '標籤', 'globe': '網站 地球 網路',
+  'link': '連結', 'image': '圖片', 'smile': '表情', 'github': 'github 原始碼', 'layers': '圖層', 'gauge': '儀表 計量',
+  'folder': '資料夾', 'folder-open': '資料夾', 'git-branch': 'git 分支', 'hard-drive': '硬碟 磁碟', 'package': '套件 包',
+  'key': '金鑰 鑰匙', 'shield': '盾牌 安全', 'settings': '設定 齒輪', 'layout-dashboard': '儀表板 總覽', 'external-link': '外部連結',
+  'download': '下載', 'bookmark': '書籤', 'history': '歷史 紀錄', 'terminal': '終端機 命令列',
+};
+const EMOJI_QUICK = ['🚀', '🛠️', '📦', '🧪', '🐞', '📊', '📁', '🔑', '🌐', '🤖', '⚡', '🔥', '⭐', '🎮', '🎬', '🎵', '📝', '📚', '💬', '🧩'];
+let iconState = null;   // { tool, tab, choice: { kind, value, data } }
+
+function iconChoices() {
+  const names = new Set([...(window.TbIcons ? TbIcons.names : []), ...(window.HubIcons ? HubIcons.names : [])]);
+  return [...names].filter((n) => !ICON_SKIP.has(n)).sort();
+}
+
+function renderIconPreview() {
+  const c = iconState.choice;
+  const box = $('iconPreview');
+  if (!c) { box.innerHTML = toolIconHtml(iconState.tool, { size: 26 }); $('iconPreviewText').textContent = '目前的圖示'; return; }
+  const fake = { ...iconState.tool, customIcon: null };
+  if (c.kind === 'name') { box.innerHTML = icon(c.value, { size: 26 }); $('iconPreviewText').textContent = c.value; }
+  else if (c.kind === 'emoji') { fake.customIcon = { kind: 'emoji', value: c.value }; box.innerHTML = toolIconHtml(fake, { size: 26 }); $('iconPreviewText').textContent = 'emoji'; }
+  else if (c.kind === 'image') { box.innerHTML = ''; const img = el('img', 'hub-custom-icon'); img.src = c.preview; img.width = img.height = 26; img.alt = ''; box.append(img); $('iconPreviewText').textContent = c.fileName; }
+  else if (c.kind === 'reset') { fake.customIcon = null; box.innerHTML = icon(toolIcon(fake), { size: 26 }); $('iconPreviewText').textContent = '預設圖示'; }
+}
+
+function renderIconGrid() {
+  const q = $('iconSearch').value.trim().toLowerCase();
+  const grid = $('iconGrid');
+  grid.innerHTML = '';
+  for (const n of iconChoices()) {
+    if (q && !(n.includes(q) || (ICON_TAGS[n] || '').toLowerCase().includes(q))) continue;
+    const b = el('button', 'hub-icon-cell');
+    b.type = 'button';
+    b.title = n + (ICON_TAGS[n] ? '｜' + ICON_TAGS[n] : '');
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', String(iconState.choice?.kind === 'name' && iconState.choice.value === n));
+    b.innerHTML = icon(n, { size: 20 });
+    b.addEventListener('click', () => { iconState.choice = { kind: 'name', value: n }; renderIconPreview(); renderIconGrid(); });
+    grid.append(b);
+  }
+  if (!grid.children.length) grid.append(el('div', 'tb-muted tb-small', '找不到符合的圖示。'));
+}
+
+function setIconTab(tab) {
+  iconState.tab = tab;
+  document.querySelectorAll('[data-icon-tab]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.iconTab === tab)));
+  document.querySelectorAll('[data-icon-pane]').forEach((p) => { p.hidden = p.dataset.iconPane !== tab; });
+  $('iconSave').classList.toggle('tb-hidden', tab === 'favicon');
+  if (tab === 'name') { renderIconGrid(); $('iconSearch').focus(); }
+  if (tab === 'emoji') $('iconEmoji').focus();
+}
+
+function openIconDialog(t) {
+  iconState = { tool: t, tab: 'name', choice: null };
+  $('iconTitle').textContent = '更換圖示：' + t.name;
+  $('iconError').textContent = '';
+  $('iconSearch').value = '';
+  $('iconEmoji').value = '';
+  $('iconFile').value = '';
+  $('iconTabFavicon').classList.toggle('tb-hidden', !t.url);
+  const quick = $('iconEmojiQuick');
+  quick.innerHTML = '';
+  for (const e of EMOJI_QUICK) {
+    const b = el('button', 'hub-icon-cell hub-icon-cell--emoji', e);
+    b.type = 'button';
+    b.addEventListener('click', () => { $('iconEmoji').value = e; iconState.choice = { kind: 'emoji', value: e }; renderIconPreview(); });
+    quick.append(b);
+  }
+  renderIconPreview();
+  $('iconDialog').showModal();
+  setIconTab('name');
+}
+
+async function saveIcon(body) {
+  $('iconError').textContent = '';
+  $('iconSave').disabled = true;
+  try {
+    await apiPost('/api/tools/library', { action: 'icon', id: iconState.tool.id, ...body });
+    $('iconDialog').close();
+    toast('ok', '圖示已更新');
+    libraryFingerprint = ''; state.dashFp = '';
+    await refresh();
+  } catch (err) {
+    $('iconError').textContent = err.message;
+  } finally {
+    $('iconSave').disabled = false;
+  }
+}
+
+document.querySelectorAll('[data-icon-tab]').forEach((b) => b.addEventListener('click', () => setIconTab(b.dataset.iconTab)));
+$('iconSearch').addEventListener('input', renderIconGrid);
+$('iconEmoji').addEventListener('input', () => {
+  const v = $('iconEmoji').value.trim();
+  iconState.choice = v ? { kind: 'emoji', value: v } : null;
+  renderIconPreview();
+});
+$('iconFile').addEventListener('change', () => {
+  const f = $('iconFile').files[0];
+  $('iconError').textContent = '';
+  if (!f) return;
+  if (f.size > 262144) { $('iconError').textContent = '圖片必須小於 256 KB。'; $('iconFile').value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const url = String(reader.result);
+    iconState.choice = { kind: 'image', data: url.slice(url.indexOf(',') + 1), preview: url, fileName: f.name };
+    renderIconPreview();
+  };
+  reader.readAsDataURL(f);
+});
+$('iconFetch').addEventListener('click', async () => {
+  const b = $('iconFetch');
+  b.classList.add('is-busy'); b.disabled = true;
+  $('iconError').textContent = '';
+  try {
+    await apiPost('/api/tools/icon/favicon', { id: iconState.tool.id });
+    $('iconDialog').close();
+    toast('ok', '已抓取網站圖示');
+    libraryFingerprint = ''; state.dashFp = '';
+    await refresh();
+  } catch (err) {
+    $('iconError').textContent = err.message;
+  } finally {
+    b.classList.remove('is-busy'); b.disabled = false;
+  }
+});
+$('iconReset').addEventListener('click', () => saveIcon({ kind: 'reset' }));
+$('iconCancel').addEventListener('click', () => $('iconDialog').close());
+$('iconSave').addEventListener('click', () => {
+  const c = iconState.choice;
+  if (!c) { $('iconError').textContent = '請先選擇一個圖示、輸入 emoji 或選擇圖片。'; return; }
+  if (c.kind === 'name') saveIcon({ kind: 'name', value: c.value });
+  else if (c.kind === 'emoji') saveIcon({ kind: 'emoji', value: c.value });
+  else if (c.kind === 'image') saveIcon({ kind: 'image', data: c.data });
+});
+
 // ---------- 綁定 ----------
 els.navDash.addEventListener('click', (ev) => { ev.preventDefault(); openDash(); });
 els.dashRefresh.addEventListener('click', () => refresh());
 els.dashShutdown.addEventListener('click', shutdownHub);
 els.navSettings.addEventListener('click', (ev) => { ev.preventDefault(); openSettings(); });
 els.phStart.addEventListener('click', () => startTool(state.selected));
+els.btnStart.addEventListener('click', () => startTool(state.selected));
 els.toolUpdate.addEventListener('click', () => applyUpdate(toolById(state.selected)));
 els.hubUpdate.addEventListener('click', () => applyUpdate(hubUpdateTarget()));
 els.btnStop.addEventListener('click', () => stopTool(state.selected));
@@ -1090,7 +1481,8 @@ els.btnReload.addEventListener('click', () => {
   // 工具 frame 與 Hub 跨來源，contentWindow.location.reload() 會拋 SecurityError；
   // 重新指派 src 屬性即使是同一 URL 也恆觸發重新導覽，跨來源安全。
   const rec = frames.get(state.selected);
-  if (rec) rec.frame.src = rec.src;
+  const t = toolById(state.selected);
+  if (rec && t) loadFrame(t, rec);
 });
 els.btnPopout.addEventListener('click', () => {
   const t = toolById(state.selected);
@@ -1098,8 +1490,55 @@ els.btnPopout.addEventListener('click', () => {
 });
 
 // ---------- 啟動 ----------
+// ---------- 側欄收合（寬螢幕；記住在 localStorage hub.side）與窄版橫向捲動提示 ----------
+// 收合時沒有另外的展開鈕：點 Dev-Toolbox 的 logo 就展開（滑過時 logo 換成展開圖示）
+function isSideCollapsed() {
+  return document.documentElement.dataset.hubSide === 'collapsed' && matchMedia('(min-width: 961px)').matches;
+}
+function syncSideToggle() {
+  const collapsed = document.documentElement.dataset.hubSide === 'collapsed';
+  els.sideToggle.setAttribute('aria-pressed', String(collapsed));
+  els.sideToggle.title = els.sideToggle.ariaLabel = '收合側欄';
+  els.sideToggle.innerHTML = icon('panel-left-close', { anim: 'nudge' });
+  const logo = $('brandLogo');
+  const label = isSideCollapsed() ? '展開側欄' : 'Dev-Toolbox';
+  logo.title = label;
+  logo.setAttribute('aria-label', label);
+}
+function setSideCollapsed(collapsed) {
+  if (collapsed) document.documentElement.dataset.hubSide = 'collapsed';
+  else delete document.documentElement.dataset.hubSide;
+  save('hub.side', collapsed ? 'collapsed' : 'expanded');
+  syncSideToggle();
+  requestAnimationFrame(syncNavFade);
+}
+els.sideToggle.addEventListener('click', () => setSideCollapsed(true));
+$('brandLogo').addEventListener('click', () => { if (isSideCollapsed()) setSideCollapsed(false); });
+window.addEventListener('resize', syncSideToggle);
+function syncSideFade() {
+  const s = els.side;
+  s.classList.toggle('can-left', s.scrollLeft > 2);
+  s.classList.toggle('can-right', s.scrollLeft + s.clientWidth < s.scrollWidth - 2);
+}
+els.side.addEventListener('scroll', syncSideFade, { passive: true });
+window.addEventListener('resize', syncSideFade);
+new MutationObserver(syncSideFade).observe(els.nav, { childList: true });
+// 工具清單（直向）：不顯示捲軸，用上下淡出提示還有內容（收合／圖示列時捲軸會把圖示擠歪）
+function syncNavFade() {
+  const n = els.nav;
+  n.classList.toggle('can-up', n.scrollTop > 2);
+  n.classList.toggle('can-down', n.scrollTop + n.clientHeight < n.scrollHeight - 2);
+}
+els.nav.addEventListener('scroll', syncNavFade, { passive: true });
+window.addEventListener('resize', syncNavFade);
+new MutationObserver(syncNavFade).observe(els.nav, { childList: true });
+
 (async function init() {
   if (window.TbIcons) TbIcons.render(document);
+  if (window.HubIcons) HubIcons.render(document);
+  syncSideToggle();
+  syncSideFade();
+  syncNavFade();
   buildSwatches();
   syncThemeControls();
   renderAll();

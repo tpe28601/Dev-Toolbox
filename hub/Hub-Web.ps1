@@ -59,15 +59,37 @@ function Get-Tools { Get-HubLibraryTools -IncludeCatalog }
 # ---------------- 執行中的工具服務 ----------------
 # $script:ToolProcs[id] = @{ Proc; Port; Url; OutFile; ErrFile; StartedAt }
 $script:ToolProcs = @{}
+$script:ToolStarting = @{}   # 啟動中（等 READY）的工具 id，避免重複啟動
+
+# 查系統的 TCP 監聽表判斷 port 是否有人在聽（一次查詢、快取 0.5 秒）。
+# 不用「試連線」：Windows 連到沒人聽的 localhost port 會重試到逾時，每個停止中的工具都要等 250ms，
+# 總覽每 3 秒輪詢一次 /api/tools 就讓 Hub 有一半時間卡在這裡。
+$script:ListenCache = @{ At = [datetime]::MinValue; Ports = $null }
+function Get-ListeningPorts {
+    if (((Get-Date) - $script:ListenCache.At).TotalMilliseconds -lt 500 -and $script:ListenCache.Ports) { return $script:ListenCache.Ports }
+    $set = New-Object 'System.Collections.Generic.HashSet[int]'
+    foreach ($ep in [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()) {
+        $a = $ep.Address
+        if ([System.Net.IPAddress]::IsLoopback($a) -or $a.Equals([System.Net.IPAddress]::Any) -or $a.Equals([System.Net.IPAddress]::IPv6Any)) {
+            [void]$set.Add($ep.Port)
+        }
+    }
+    $script:ListenCache = @{ At = (Get-Date); Ports = $set }
+    return $set
+}
 
 function Test-PortFree([int]$p) {
-    try {
-        $c = New-Object System.Net.Sockets.TcpClient
-        $iar = $c.BeginConnect('127.0.0.1', $p, $null, $null)
-        $ok = $iar.AsyncWaitHandle.WaitOne(250, $false)
-        if ($ok -and $c.Connected) { $c.Close(); return $false }
-        $c.Close(); return $true
-    } catch { return $true }
+    try { return -not (Get-ListeningPorts).Contains($p) }
+    catch {
+        # 監聽表讀不到時退回試連線
+        try {
+            $c = New-Object System.Net.Sockets.TcpClient
+            $iar = $c.BeginConnect('127.0.0.1', $p, $null, $null)
+            $ok = $iar.AsyncWaitHandle.WaitOne(250, $false)
+            if ($ok -and $c.Connected) { $c.Close(); return $false }
+            $c.Close(); return $true
+        } catch { return $true }
+    }
 }
 
 function Test-VenvUsable([string]$VenvDir) {
@@ -214,19 +236,33 @@ function Get-ToolStatus($t) {
     return $null
 }
 
+# 啟動分兩段：Start-ToolBegin 只負責開行程（立即回傳），Step-ToolStart 每次檢查一下 READY 行。
+# HTTP 端點用延後回應（Add-PendingResponse）輪詢 Step-ToolStart，啟動中 Hub 仍能處理其他請求；
+# 更新流程等同步呼叫端用 Start-ToolService（內部自己輪詢到完成）。
 function Start-ToolService([string]$Id) {
+    $st = Start-ToolBegin $Id
+    if ($st.Done) { return $st.Result }
+    while ($true) {
+        $r = Step-ToolStart $st
+        if ($null -ne $r) { return $r }
+        Start-Sleep -Milliseconds 300
+    }
+}
+
+function Start-ToolBegin([string]$Id) {
     $t = @(Get-Tools | Where-Object { $_.Id -eq $Id }) | Select-Object -First 1
     if (-not $t) { throw @{ code = 'TOOL_NOT_FOUND'; message = "找不到工具：$Id" } }
     if (-not $t.Installed) { throw @{ code = 'ENV_MISSING'; message = "$Id：$($t.Error)" } }
-    if ($t.Source -eq 'link') { Open-ToolLink $t.Url; return @{ opened = $true } }
+    if ($t.Source -eq 'link') { Open-ToolLink $t.Url; return @{ Done = $true; Result = @{ opened = $true } } }
     if (-not $t.Manifest.web -and $t.Manifest.cli) {
         if ($t.Id -cnotmatch '^[a-z0-9]+(-[a-z0-9]+)*$') { throw '工具 ID 不符合工具規格。' }
         $cli = Join-Path $PSScriptRoot 'hub.ps1'
         $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', ('"{0}"' -f $cli),
             '-InstallationRoot', ('"{0}"' -f $InstallationRoot), 'run', $t.Id)
         Start-Process -FilePath 'powershell.exe' -ArgumentList $args -WorkingDirectory $t.Dir
-        return @{ opened = $true }
+        return @{ Done = $true; Result = @{ opened = $true } }
     }
+    if ($script:ToolStarting.ContainsKey($Id)) { throw @{ code = 'ALREADY_STARTING'; message = "$Id 正在啟動中" } }
     if ($script:ToolProcs.ContainsKey($Id)) { throw @{ code = 'ALREADY_RUNNING'; message = "$Id 已在執行（port $($script:ToolProcs[$Id].Port)）" } }
     $st = Get-ToolStatus $t
     if ($st) { throw @{ code = 'ALREADY_RUNNING'; message = "$Id 已在 127.0.0.1:$($st.port) 運行（非 Hub 啟動）" } }
@@ -281,10 +317,14 @@ function Start-ToolService([string]$Id) {
     if (-not $toolProc) { throw @{ code = 'START_FAILED'; message = "無法啟動 $Id" } }
 
     # 等 READY 行（寫入 logfile）；工具啟動通常 <5 秒，給 30 秒上限
-    $readyPort = 0
-    $failMsg = $null
-    $deadline = (Get-Date).AddSeconds(30)
-    while ((Get-Date) -lt $deadline) {
+    $script:ToolStarting[$Id] = $true
+    return @{ Done = $false; Id = $Id; Proc = $toolProc; OutFile = $outFile; ErrFile = $errFile; Deadline = (Get-Date).AddSeconds(30) }
+}
+
+# 檢查一次啟動狀態：完成回傳結果物件、失敗 throw、還在等回傳 $null
+function Step-ToolStart($St) {
+    $Id = $St.Id; $toolProc = $St.Proc; $outFile = $St.OutFile; $errFile = $St.ErrFile
+    try {
         if (Test-Path -LiteralPath $outFile) {
             # 子行程的 stdout 檔句柄帶 Write 存取，必須用 FileShare.ReadWrite 開，否則 ReadAllText 必然 SharingViolation
             $txt = ''
@@ -294,45 +334,99 @@ function Start-ToolService([string]$Id) {
                 $txt = $sr.ReadToEnd()
                 $sr.Dispose(); $fs.Dispose()
             } catch { $txt = '' }
-            if ($txt -match 'READY http://127\.0\.0\.1:(\d+)') { $readyPort = [int]$matches[1]; break }
+            if ($txt -match 'READY http://127\.0\.0\.1:(\d+)') {
+                $readyPort = [int]$matches[1]
+                $url = "http://127.0.0.1:$readyPort"
+                $script:ToolProcs[$Id] = @{ Proc = $toolProc; Port = $readyPort; Url = $url; OutFile = $outFile; ErrFile = $errFile; StartedAt = (Get-Date) }
+                $script:ToolStarting.Remove($Id)
+                return [pscustomobject]@{ port = $readyPort; url = $url; pid = [int]$toolProc.Id; managed = $true }
+            }
         }
         $toolProc.Refresh()
         if ($toolProc.HasExited) {
             $err = ''
             if (Test-Path -LiteralPath $errFile) { try { $err = ' ' + ((Get-Content -LiteralPath $errFile -Tail 5) -join ' / ') } catch {} }
-            $failMsg = "$Id 啟動即結束（exit $($toolProc.ExitCode)）$err"
-            break
+            throw @{ code = 'START_FAILED'; message = "$Id 啟動即結束（exit $($toolProc.ExitCode)）$err" }
         }
-        Start-Sleep -Milliseconds 300
+        if ((Get-Date) -gt $St.Deadline) {
+            try { & taskkill.exe /T /F /PID $toolProc.Id 2>&1 | Out-Null } catch {}
+            throw @{ code = 'START_TIMEOUT'; message = "$Id 30 秒內沒有出現 READY 行" }
+        }
+        return $null
+    } catch {
+        $script:ToolStarting.Remove($Id)
+        throw
     }
-    if ($failMsg) { throw @{ code = 'START_FAILED'; message = $failMsg } }
-    if ($readyPort -eq 0) {
-        try { & taskkill.exe /T /F /PID $toolProc.Id 2>&1 | Out-Null } catch {}
-        throw @{ code = 'START_TIMEOUT'; message = "$Id 30 秒內沒有出現 READY 行" }
-    }
-
-    $url = "http://127.0.0.1:$readyPort"
-    $script:ToolProcs[$Id] = @{ Proc = $toolProc; Port = $readyPort; Url = $url; OutFile = $outFile; ErrFile = $errFile; StartedAt = (Get-Date) }
-    return [pscustomobject]@{ port = $readyPort; url = $url; pid = [int]$toolProc.Id; managed = $true }
 }
 
 function Stop-ToolService([string]$Id) {
-    if (-not $script:ToolProcs.ContainsKey($Id)) { throw @{ code = 'NOT_RUNNING'; message = "$Id 不是由 Hub 啟動或已停止" } }
-    $e = $script:ToolProcs[$Id]
-    # 優先請服務自己乾淨關機（TOOL-SPEC POST /api/shutdown），5 秒後還在就殺整棵樹
-    $done = $false
-    $r = Invoke-ToolHttp "$($e.Url)/api/shutdown" 'POST' 1500
-    if ($r -and $r.ok) { $done = $true }
-    $deadline = (Get-Date).AddSeconds(5)
-    while ((Get-Date) -lt $deadline) {
-        try { $e.Proc.Refresh(); if ($e.Proc.HasExited) { $done = $true; break } } catch { $done = $true; break }
+    $st = Stop-ToolBegin $Id
+    while ($true) {
+        $r = Step-ToolStop $st
+        if ($null -ne $r) { return $r }
         Start-Sleep -Milliseconds 300
     }
-    if (-not $done) {
-        & taskkill.exe /T /F /PID $e.Proc.Id 2>&1 | Out-Null
+}
+
+function Stop-ToolBegin([string]$Id) {
+    if (-not $script:ToolProcs.ContainsKey($Id)) { return (Stop-ExternalToolBegin $Id) }
+    $e = $script:ToolProcs[$Id]
+    # 優先請服務自己乾淨關機（TOOL-SPEC POST /api/shutdown），5 秒後還在就殺整棵樹
+    $r = Invoke-ToolHttp "$($e.Url)/api/shutdown" 'POST' 1500
+    return @{ Id = $Id; Entry = $e; Asked = [bool]($r -and $r.ok); Deadline = (Get-Date).AddSeconds(5) }
+}
+
+# 外部啟動（不是 Hub 開的）工具：先請它自己關閉（POST /api/shutdown）；5 秒後還在聽 port，
+# 才結束「正在聽這個 port、而且確定是這個工具」的行程：
+#   - 聽 port 的 PID 要等於工具 /api/health 自己回報的 pid
+#   - 那個行程的命令列要含這個工具的資料夾路徑或資料夾名稱
+# 任一項比對不上就拒絕，不會誤殺其他程式。
+function Stop-ExternalToolBegin([string]$Id) {
+    $t = @(Get-Tools | Where-Object { $_.Id -ceq $Id }) | Select-Object -First 1
+    if (-not $t) { throw @{ code = 'TOOL_NOT_FOUND'; message = "找不到工具：$Id" } }
+    $st = Get-ToolStatus $t
+    if (-not $st) { throw @{ code = 'NOT_RUNNING'; message = "$($t.Name) 沒有在執行" } }
+    $r = Invoke-ToolHttp "$($st.url)/api/shutdown" 'POST' 1500
+    return @{ Id = $Id; External = $true; Tool = $t; Port = [int]$st.port; HealthPid = [int]$st.pid;
+        Asked = [bool]($r -and $r.ok); Deadline = (Get-Date).AddSeconds(5) }
+}
+
+function Step-ExternalToolStop($St) {
+    $script:ListenCache.At = [datetime]::MinValue   # 每次都重查監聽表
+    if (Test-PortFree $St.Port) { return [pscustomobject]@{ stopped = $true; clean = $true; external = $true } }
+    if ((Get-Date) -lt $St.Deadline) { return $null }
+    # 自己沒有關：找出聽這個 port 的行程並確認身分
+    $owner = @(Get-NetTCPConnection -LocalPort $St.Port -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { $_.LocalAddress -in '127.0.0.1', '0.0.0.0', '::1', '::' } | Select-Object -ExpandProperty OwningProcess -Unique)
+    if ($owner.Count -ne 1 -or $owner[0] -le 4) {
+        throw @{ code = 'STOP_REFUSED'; message = "$($St.Tool.Name) 沒有回應關閉要求，而且找不到唯一一個在聽 port $($St.Port) 的行程，Hub 不會強制結束。請到它自己的視窗關閉。" }
     }
-    $script:ToolProcs.Remove($Id)
-    return [pscustomobject]@{ stopped = $true; clean = $done }
+    $procId = [int]$owner[0]
+    if ($St.HealthPid -gt 0 -and $procId -ne $St.HealthPid) {
+        throw @{ code = 'STOP_REFUSED'; message = "在聽 port $($St.Port) 的行程（pid $procId）和工具回報的 pid（$($St.HealthPid)）不一致，Hub 不會強制結束。請到它自己的視窗關閉。" }
+    }
+    $cmd = [string](Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue).CommandLine
+    $dir = [string]$St.Tool.Dir
+    $leaf = if ($dir) { Split-Path -Leaf $dir } else { '' }
+    $match = ($dir -and $cmd.IndexOf($dir, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+        ($leaf -and $cmd.IndexOf($leaf, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+    if (-not $match) {
+        throw @{ code = 'STOP_REFUSED'; message = "在聽 port $($St.Port) 的行程（pid $procId）看起來不是 $($St.Tool.Name)（命令列裡找不到工具資料夾），Hub 不會強制結束。請到它自己的視窗關閉。" }
+    }
+    & taskkill.exe /T /F /PID $procId 2>&1 | Out-Null
+    return [pscustomobject]@{ stopped = $true; clean = $false; external = $true; pid = $procId }
+}
+
+# 檢查一次停止狀態：完成回傳結果、還在等回傳 $null
+function Step-ToolStop($St) {
+    if ($St.External) { return (Step-ExternalToolStop $St) }
+    $e = $St.Entry
+    $gone = $false
+    try { $e.Proc.Refresh(); $gone = $e.Proc.HasExited } catch { $gone = $true }
+    if (-not $gone -and (Get-Date) -lt $St.Deadline) { return $null }
+    if (-not $gone) { & taskkill.exe /T /F /PID $e.Proc.Id 2>&1 | Out-Null }
+    $script:ToolProcs.Remove($St.Id)
+    return [pscustomobject]@{ stopped = $true; clean = $gone }
 }
 
 # ---------------- 卡片副標與工作歷史（總覽頁用） ----------------
@@ -506,6 +600,8 @@ function Get-ToolsView {
         if ($local) { $running = Get-ToolStatus $t }
         $dataPath = $null
         if ($t.Source -in 'catalog','managed','bundled') { $dataPath = Get-OfficialToolDataPath $t.Id }
+        # 「清除資料」只在資料夾真的存在時提供
+        if ($dataPath -and -not [IO.Directory]::Exists($dataPath)) { $dataPath = $null }
         $out += [pscustomobject]@{
             id        = $t.Id
             name      = $t.Name
@@ -518,6 +614,7 @@ function Get-ToolsView {
             path      = $t.ImportPath
             dataPath  = $dataPath
             icon      = [string]$t.Manifest.icon
+            customIcon = $t.CustomIcon
             error     = $t.Error
             runtime   = if ($t.Installed) { [string]$t.Manifest.runtime.kind } else { '' }
             runtimeDetail = if ($local) { Get-RuntimeDetail $t } else { '' }
@@ -603,6 +700,7 @@ function Get-StaticFile([string]$path) {
         '/app.js'      = @('app.js', 'application/javascript; charset=utf-8', $script:UiDir)
         '/hub.css'     = @('hub.css', 'text/css; charset=utf-8', $script:UiDir)
         '/hub-bg.js'   = @('hub-bg.js', 'application/javascript; charset=utf-8', $script:UiDir)
+        '/hub-icons.js' = @('hub-icons.js', 'application/javascript; charset=utf-8', $script:UiDir)
         '/ui-kit.css'  = @('ui-kit.css', 'text/css; charset=utf-8', $script:KitDir)
         '/tb-theme.js' = @('tb-theme.js', 'application/javascript; charset=utf-8', $script:KitDir)
         '/tb-icons.js' = @('tb-icons.js', 'application/javascript; charset=utf-8', $script:KitDir)
@@ -754,6 +852,35 @@ function Update-ToolLibrary($Body) {
             })
             if (-not $updated) { $library.links += $link }
         }
+        'icon' {
+            if (-not $tool -or $tool.Source -eq 'catalog') { throw '找不到可以更換圖示的工具。' }
+            switch ([string]$Body.kind) {
+                'name' {
+                    $v = [string]$Body.value
+                    if ($v -cnotmatch '^[a-z0-9][a-z0-9-]{0,39}$') { throw '圖示名稱不正確。' }
+                    Remove-ToolIconFiles $id
+                    Set-ToolIcon $library $id 'name' $v
+                }
+                'emoji' {
+                    $v = ([string]$Body.value).Trim()
+                    # 一個 emoji（可含膚色、ZWJ 組合）最多 16 個 UTF-16 字元；不接受一般文字或控制字元
+                    if (-not $v -or $v.Length -gt 16 -or $v -match '[\x00-\x1f<>&"\x27]' -or $v -match '^[\x20-\x7e]+$') { throw '請輸入一個 emoji。' }
+                    Remove-ToolIconFiles $id
+                    Set-ToolIcon $library $id 'emoji' $v
+                }
+                'image' {
+                    $bytes = $null
+                    try { $bytes = [Convert]::FromBase64String([string]$Body.data) } catch { throw '圖片資料不正確。' }
+                    [void](Save-ToolIconImage $id $bytes)
+                    Set-ToolIcon $library $id 'image' ''
+                }
+                'reset' {
+                    Remove-ToolIconFiles $id
+                    Set-ToolIcon $library $id '' ''
+                }
+                default { throw '不支援的圖示類型。' }
+            }
+        }
         'visibility' {
             if (-not $tool -or $tool.Source -eq 'catalog' -or $Body.hidden -isnot [bool]) { throw '找不到可設定顯示的工具。' }
             $library.hidden = @($library.hidden | Where-Object { $_ -cne $id })
@@ -765,6 +892,8 @@ function Update-ToolLibrary($Body) {
             $library.imports = @($library.imports | Where-Object id -CNE $id)
             $library.links = @($library.links | Where-Object id -CNE $id)
             $library.hidden = @($library.hidden | Where-Object { $_ -cne $id })
+            Remove-ToolIconFiles $id
+            Set-ToolIcon $library $id '' ''
         }
         'uninstall' {
             if ($Body.confirm -isnot [bool] -or -not $Body.confirm -or $tool.Source -ne 'managed') { throw '只能解除安裝由 Hub 下載的工具。' }
@@ -793,6 +922,145 @@ function Update-ToolLibrary($Body) {
     Save-ToolLibrary $library
 }
 
+
+# ---------------- 資料夾選擇視窗（獨立 STA 行程） ----------------
+# 選擇視窗開在另一個 powershell.exe：Hub 主迴圈不會被卡住，取消時直接結束那個行程。
+# 先顯示一個置頂、幾乎透明的擁有者視窗，選擇視窗屬於它，所以一定在最上層（不會躲在瀏覽器後面）。
+$script:FolderPicker = $null
+$script:FolderPickerScript = @'
+param([string]$OutFile)
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$owner = New-Object System.Windows.Forms.Form
+$owner.ShowInTaskbar = $false
+$owner.TopMost = $true
+$owner.FormBorderStyle = 'None'
+$owner.StartPosition = 'CenterScreen'
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.Opacity = 0.01
+$owner.Text = 'Dev-Toolbox'
+$owner.Show()
+$owner.Activate()
+$picker = New-Object System.Windows.Forms.FolderBrowserDialog
+$picker.Description = '選擇包含 tool.json 的工具資料夾'
+$picker.ShowNewFolderButton = $false
+$path = ''
+try { if ($picker.ShowDialog($owner) -eq 'OK') { $path = $picker.SelectedPath } }
+finally { $picker.Dispose(); $owner.Close(); $owner.Dispose() }
+[IO.File]::WriteAllText($OutFile, $path, (New-Object Text.UTF8Encoding $false))
+'@
+
+function Start-FolderPicker {
+    if ($script:FolderPicker -and -not $script:FolderPicker.Proc.HasExited) {
+        throw @{ code = 'PICKER_OPEN'; message = '資料夾選擇視窗已經開著（可能在其他視窗後面）。' }
+    }
+    $out = Join-Path ([IO.Path]::GetTempPath()) ('dev-toolbox-folder-' + [guid]::NewGuid().ToString('N') + '.txt')
+    $script = Join-Path ([IO.Path]::GetTempPath()) ('dev-toolbox-picker-' + $PID + '.ps1')
+    # 腳本含中文：寫成 UTF-8 with BOM，Windows PowerShell 5.1 才會正確讀取
+    [IO.File]::WriteAllText($script, $script:FolderPickerScript, (New-Object Text.UTF8Encoding $true))
+    $p = Start-Process -FilePath 'powershell.exe' -PassThru -WindowStyle Hidden -ArgumentList @(
+        '-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $script), '-OutFile', ('"{0}"' -f $out))
+    $script:FolderPicker = @{ Proc = $p; Out = $out; Deadline = (Get-Date).AddMinutes(10) }
+    return $script:FolderPicker
+}
+
+function Step-FolderPicker($St) {
+    $St.Proc.Refresh()
+    if (-not $St.Proc.HasExited) {
+        if ((Get-Date) -lt $St.Deadline) { return $null }
+        try { $St.Proc.Kill() } catch { }
+    }
+    $path = ''
+    if (Test-Path -LiteralPath $St.Out) {
+        try { $path = [IO.File]::ReadAllText($St.Out).Trim() } catch { }
+        Remove-Item -LiteralPath $St.Out -Force -ErrorAction SilentlyContinue
+    }
+    if ($script:FolderPicker -eq $St) { $script:FolderPicker = $null }
+    return @{ path = $path; cancelled = -not $path }
+}
+
+function Stop-FolderPicker {
+    $st = $script:FolderPicker
+    if ($st) { try { if (-not $st.Proc.HasExited) { $st.Proc.Kill() } } catch { } }
+}
+
+# ---------------- 背景網路請求（檢查更新時不卡住 Hub） ----------------
+function Start-BackgroundRest([string]$Uri, $Headers, [int]$TimeoutSec = 12) {
+    $ps = [PowerShell]::Create()
+    [void]$ps.AddScript({
+        param($u, $h, $t)
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        Invoke-RestMethod -Uri $u -Headers $h -TimeoutSec $t
+    }).AddArgument($Uri).AddArgument($Headers).AddArgument($TimeoutSec)
+    return @{ PS = $ps; Async = $ps.BeginInvoke() }
+}
+
+# 完成回傳 @{ Data }；還在跑回傳 $null；失敗 throw
+function Step-BackgroundRest($Job) {
+    if (-not $Job.Async.IsCompleted) { return $null }
+    try {
+        $out = $Job.PS.EndInvoke($Job.Async)
+        if ($Job.PS.HadErrors -and $Job.PS.Streams.Error.Count -gt 0) { throw $Job.PS.Streams.Error[0].Exception }
+        return @{ Data = @($out) }
+    } finally { $Job.PS.Dispose() }
+}
+
+# ---------------- 延後回應 ----------------
+# 需要等待的請求（啟動／停止工具、選資料夾、檢查更新）把 $ctx.Deferred 設成
+# @{ State; Poll = { param($state, $ctx) ...; 完成時填好 $ctx 並回傳 $true } }，
+# 主迴圈每一輪呼叫一次 Poll；完成才送出回應。其他請求照常立即處理。
+$script:Pending = New-Object System.Collections.ArrayList
+
+function Set-ErrorJson($ctx, $err) {
+    if ($err.TargetObject -is [hashtable] -and $err.TargetObject.ContainsKey('code')) {
+        Send-JsonRaw $ctx ([pscustomobject]@{ ok = $false; error = [pscustomobject]$err.TargetObject }) 400
+    } else {
+        Send-JsonRaw $ctx ([pscustomobject]@{ ok = $false; error = [pscustomobject]@{ code = 'INTERNAL'; message = $err.Exception.Message; detail = $null } }) 500
+    }
+}
+
+function Step-PendingResponses {
+    if ($script:Pending.Count -eq 0) { return }
+    foreach ($p in @($script:Pending)) {
+        $done = $false
+        try { $done = [bool](& $p.Ctx.Deferred.Poll $p.Ctx.Deferred.State $p.Ctx | Select-Object -Last 1) }
+        catch { Set-ErrorJson $p.Ctx $_; $done = $true }
+        if (-not $done) { continue }
+        [void]$script:Pending.Remove($p)
+        try { Send-Response $p.H ([int]$p.Ctx.Code) ([string]$p.Ctx.Type) ([byte[]]$p.Ctx.Bytes) }
+        catch { try { $p.H.Response.Abort() } catch { } }
+    }
+}
+
+
+# 工具頁能不能嵌進 Hub：讀工具首頁的 X-Frame-Options 與 CSP frame-ancestors。
+# 嵌入被擋時瀏覽器只會顯示一個禁止圖示，Hub 先問過就能顯示原因與替代做法。
+function Test-ToolEmbeddable([string]$Url) {
+    $hub = "http://127.0.0.1:$Port"
+    try {
+        $rq = [System.Net.HttpWebRequest]::Create("$Url/")
+        $rq.Method = 'GET'; $rq.Timeout = 1500; $rq.ReadWriteTimeout = 1500; $rq.Proxy = $null; $rq.AllowAutoRedirect = $false
+        $resp = $rq.GetResponse()
+        try {
+            $xfo = [string]$resp.Headers['X-Frame-Options']
+            $csp = [string]$resp.Headers['Content-Security-Policy']
+        } finally { $resp.Close() }
+    } catch { return @{ embeddable = $true; reason = '' } }   # 讀不到就不阻擋，交給 iframe 自己載入
+    if ($xfo -match '(?i)deny|sameorigin') { return @{ embeddable = $false; reason = "工具回應 X-Frame-Options: $xfo，不允許被其他頁面嵌入。" } }
+    if ($csp -match '(?i)frame-ancestors\s+([^;]*)') {
+        $allowed = @($Matches[1].Trim() -split '\s+')
+        $ok = $false
+        foreach ($a in $allowed) {
+            $a = $a.Trim("'").ToLowerInvariant()
+            if ($a -eq '*' -or $a -eq $hub -or $a -eq "http://localhost:$Port" -or $a -eq 'http://127.0.0.1:*' -or $a -eq 'http://localhost:*') { $ok = $true; break }
+        }
+        if (-not $ok) {
+            return @{ embeddable = $false; reason = "工具只允許 $($Matches[1].Trim()) 嵌入，這個 Hub 在 $hub。通常是工具不是由這個 Hub 啟動，或 Hub 換了 port。" }
+        }
+    }
+    return @{ embeddable = $true; reason = '' }
+}
+
 function Route-Request($req, $ctx) {
     $path = ($req.RawUrl -split '\?')[0]
     $method = ([string]$req.Method).ToUpperInvariant()
@@ -816,6 +1084,20 @@ function Route-Request($req, $ctx) {
             }
             '/api/settings' {
                 Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; settings = (Get-HubSettings) })
+                return
+            }
+            '/api/icon' {
+                $iconId = ''
+                $qs = (([string]$req.RawUrl) -split '\?', 2)
+                if ($qs.Count -eq 2) {
+                    foreach ($pair in ($qs[1] -split '&')) {
+                        $kv = $pair -split '=', 2
+                        if ($kv.Count -eq 2 -and $kv[0] -eq 'id') { $iconId = [Uri]::UnescapeDataString($kv[1]) }
+                    }
+                }
+                $f = Get-ToolIconFile $iconId
+                if (-not $f) { Send-Text $ctx 404 '404 Not Found'; return }
+                $ctx.Code = 200; $ctx.Type = $f.Type; $ctx.Bytes = [IO.File]::ReadAllBytes($f.Path)
                 return
             }
             '/api/activity' {
@@ -876,33 +1158,96 @@ function Route-Request($req, $ctx) {
             return
         }
         '/api/tools/folder' {
-            Add-Type -AssemblyName System.Windows.Forms
-            $picker = New-Object Windows.Forms.FolderBrowserDialog
-            $picker.Description = '選擇包含 tool.json 的工具資料夾'
-            $picker.ShowNewFolderButton = $false
-            $owner = New-Object Windows.Forms.Form
-            try {
-                $owner.ShowInTaskbar = $false
-                $owner.TopMost = $true
-                $result = if ($picker.ShowDialog($owner) -eq 'OK') { $picker.SelectedPath }
-                Send-JsonRaw $ctx @{ ok = $true; path = $result }
-            } finally { $picker.Dispose(); $owner.Dispose() }
+            $ctx.Deferred = @{ State = (Start-FolderPicker); Poll = {
+                param($st, $c)
+                $r = Step-FolderPicker $st
+                if ($null -eq $r) { return $false }
+                Send-JsonRaw $c @{ ok = $true; path = $r.path; cancelled = $r.cancelled }
+                return $true
+            } }
+            return
+        }
+        '/api/tools/icon/favicon' {
+            # 只在使用者按「抓取網站圖示」時才連網；在背景下載，Hub 不會被卡住
+            $b = Read-JsonBody $req
+            $t = @(Get-Tools | Where-Object { $_.Id -ceq [string]$b.id }) | Select-Object -First 1
+            if (-not $t -or $t.Source -ne 'link') { throw @{ code = 'BAD_ARGS'; message = '只有網站連結可以抓取網站圖示。' } }
+            $u = [uri](ConvertTo-ToolLink $t.Url)
+            $favUrl = "$($u.Scheme)://$($u.Authority)/favicon.ico"
+            $ps = [PowerShell]::Create()
+            [void]$ps.AddScript({
+                param($url, $max)
+                [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+                $rq = [System.Net.HttpWebRequest]::Create($url)
+                $rq.Timeout = 6000; $rq.ReadWriteTimeout = 6000; $rq.UserAgent = 'Dev-Toolbox-Hub'
+                $resp = $rq.GetResponse()
+                try {
+                    $s = $resp.GetResponseStream(); $ms = New-Object IO.MemoryStream; $buf = New-Object byte[] 8192
+                    while (($n = $s.Read($buf, 0, $buf.Length)) -gt 0) { $ms.Write($buf, 0, $n); if ($ms.Length -gt $max) { throw '網站圖示太大（超過 256 KB）。' } }
+                    [Convert]::ToBase64String($ms.ToArray())
+                } finally { $resp.Close() }
+            }).AddArgument($favUrl).AddArgument($script:IconMaxBytes)
+            $job = @{ PS = $ps; Async = $ps.BeginInvoke() }
+            $ctx.Deferred = @{ State = @{ Id = $t.Id; Job = $job }; Poll = {
+                param($st, $c)
+                try { $res = Step-BackgroundRest $st.Job }
+                catch {
+                    $ex = $_.Exception
+                    while ($ex.InnerException) { $ex = $ex.InnerException }
+                    throw @{ code = 'FAVICON_FAILED'; message = "抓不到網站圖示（$($ex.Message)）。可以改用「上傳圖片」。" }
+                }
+                if ($null -eq $res) { return $false }
+                $bytes = [Convert]::FromBase64String([string]($res.Data | Select-Object -Last 1))
+                try { [void](Save-ToolIconImage $st.Id $bytes) } catch { throw @{ code = 'FAVICON_BAD'; message = "抓到的網站圖示不能用：$($_.Exception.Message)" } }
+                $lib = Get-ToolLibrary
+                Set-ToolIcon $lib $st.Id 'image' ''
+                Save-ToolLibrary $lib
+                Send-JsonRaw $c @{ ok = $true }
+                return $true
+            } }
+            return
+        }
+        '/api/tools/embed-check' {
+            $b = Read-JsonBody $req
+            $t = @(Get-Tools | Where-Object { $_.Id -eq [string]$b.id }) | Select-Object -First 1
+            if (-not $t) { throw @{ code = 'TOOL_NOT_FOUND'; message = '找不到工具' } }
+            $st = Get-ToolStatus $t
+            if (-not $st) { throw @{ code = 'NOT_RUNNING'; message = '工具沒有在執行' } }
+            $r = Test-ToolEmbeddable ([string]$st.url)
+            Send-JsonRaw $ctx @{ ok = $true; embeddable = $r.embeddable; reason = $r.reason }
+            return
+        }
+        '/api/tools/folder/cancel' {
+            Stop-FolderPicker
+            Send-JsonRaw $ctx @{ ok = $true }
             return
         }
         '/api/tools/update/check' {
             $b = Read-JsonBody $req
             $t = Get-UpdatableTool ([string]$b.id)
             $script:ToolUpdateOffers.Remove($t.Id)
-            $offer = Get-ToolRelease $t $script:HubManifest.version -LocalPython { param($id,$abi) Find-CompatibleToolPython $id $abi }
-            $update = $null
-            if ($offer) {
-                $script:ToolUpdateOffers[$t.Id] = @{ offer = $offer; current = $t.Version; expires = (Get-Date).AddMinutes(10) }
-                $update = @{ version = $offer.version; notes = $offer.notes; variant = $offer.variant; size = $offer.size }
-            }
-            $message = if (-not $offer -and $t.Source -eq 'catalog' -and $t.Id -in $script:PortablePythonToolIds) {
-                '目前沒有相容的安裝套件。輕量版需要 Python 3.11 以上及工具所需的相依套件；也可以等待發布內附 Python 的完整版。'
-            }
-            Send-JsonRaw $ctx @{ ok = $true; update = $update; message = $message }
+            $repo = $script:ToolReleaseRepos[$t.Id]
+            if (-not $repo) { throw '這個工具沒有設定公開更新來源。' }
+            # GitHub 查詢在背景 runspace 跑（最多 12 秒），Hub 在等的時候照常回應其他請求
+            $headers = @{ Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+            $job = Start-BackgroundRest "https://api.github.com/repos/$repo/releases?per_page=100" $headers 12
+            $ctx.Deferred = @{ State = @{ Tool = $t; Repo = $repo; Job = $job }; Poll = {
+                param($st, $c)
+                $res = Step-BackgroundRest $st.Job
+                if ($null -eq $res) { return $false }
+                $t = $st.Tool
+                $offer = Select-ToolRelease $t $st.Repo $script:HubManifest.version $res.Data -LocalPython { param($id,$abi) Find-CompatibleToolPython $id $abi }
+                $update = $null
+                if ($offer) {
+                    $script:ToolUpdateOffers[$t.Id] = @{ offer = $offer; current = $t.Version; expires = (Get-Date).AddMinutes(10) }
+                    $update = @{ version = $offer.version; notes = $offer.notes; variant = $offer.variant; size = $offer.size; page = $offer.page }
+                }
+                $message = if (-not $offer -and $t.Source -eq 'catalog' -and $t.Id -in $script:PortablePythonToolIds) {
+                    '目前沒有相容的安裝套件。輕量版需要 Python 3.11 以上及工具所需的相依套件；也可以等待發布內附 Python 的完整版。'
+                }
+                Send-JsonRaw $c @{ ok = $true; update = $update; message = $message }
+                return $true
+            } }
             return
         }
         '/api/tools/update/apply' {
@@ -929,16 +1274,28 @@ function Route-Request($req, $ctx) {
             $b = Read-JsonBody $req
             $id = [string]$b.id
             if (-not $id) { throw @{ code = 'BAD_ARGS'; message = '缺少 id' } }
-            $r = Start-ToolService $id
-            Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; result = $r })
+            $st = Start-ToolBegin $id
+            if ($st.Done) { Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; result = $st.Result }); return }
+            $ctx.Deferred = @{ State = $st; Poll = {
+                param($s, $c)
+                $r = Step-ToolStart $s
+                if ($null -eq $r) { return $false }
+                Send-JsonRaw $c ([pscustomobject]@{ ok = $true; result = $r })
+                return $true
+            } }
             return
         }
         '/api/tools/stop' {
             $b = Read-JsonBody $req
             $id = [string]$b.id
             if (-not $id) { throw @{ code = 'BAD_ARGS'; message = '缺少 id' } }
-            $r = Stop-ToolService $id
-            Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; result = $r })
+            $ctx.Deferred = @{ State = (Stop-ToolBegin $id); Poll = {
+                param($s, $c)
+                $r = Step-ToolStop $s
+                if ($null -eq $r) { return $false }
+                Send-JsonRaw $c ([pscustomobject]@{ ok = $true; result = $r })
+                return $true
+            } }
             return
         }
         '/api/settings' {
@@ -990,13 +1347,10 @@ function Handle-Client($hctx) {
                 Route-Request $req $ctx
             }
         } catch {
-            $err = $_
-            if ($err.TargetObject -is [hashtable] -and $err.TargetObject.ContainsKey('code')) {
-                Send-JsonRaw $ctx ([pscustomobject]@{ ok = $false; error = [pscustomobject]$err.TargetObject }) 400
-            } else {
-                Send-JsonRaw $ctx ([pscustomobject]@{ ok = $false; error = [pscustomobject]@{ code = 'INTERNAL'; message = $err.Exception.Message; detail = $null } }) 500
-            }
+            $ctx.Deferred = $null
+            Set-ErrorJson $ctx $_
         }
+        if ($ctx.Deferred) { [void]$script:Pending.Add(@{ H = $hctx; Ctx = $ctx }); return }
         Send-Response $hctx ([int]$ctx.Code) ([string]$ctx.Type) ([byte[]]$ctx.Bytes)
     } catch {
         # 客戶端中斷之類，忽略
@@ -1082,8 +1436,11 @@ try {
             $pendingCtx = $null
             if ($hctx) { Handle-Client $hctx }
         }
+        Step-PendingResponses
     }
 } finally {
+    Stop-FolderPicker
+    foreach ($p in @($script:Pending)) { try { $p.H.Response.Abort() } catch { } }
     try { $listener.Stop(); $listener.Close() } catch { }
     foreach ($id in @($script:ToolProcs.Keys)) {
         try { & taskkill.exe /T /F /PID $script:ToolProcs[$id].Proc.Id 2>&1 | Out-Null } catch {}

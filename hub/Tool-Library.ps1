@@ -9,8 +9,75 @@
 
 function Get-ToolLibrary {
     $path = Join-Path $ToolUpdateStore 'library.json'
-    if (Test-Path -LiteralPath $path -PathType Leaf) { return (Read-JsonFile $path) }
-    return [pscustomobject]@{ imports = @(); links = @(); hidden = @() }
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        $lib = Read-JsonFile $path
+        if ($null -eq $lib.PSObject.Properties['icons']) { $lib | Add-Member -NotePropertyName icons -NotePropertyValue @() }
+        return $lib
+    }
+    return [pscustomobject]@{ imports = @(); links = @(); hidden = @(); icons = @() }
+}
+
+# ---------------- 自訂圖示 ----------------
+# library.json 的 icons：[{ id; kind = name|emoji|image; value }]；圖片存在 <ToolUpdateStore>\icons\<id>.<ext>
+$script:IconMaxBytes = 262144
+$script:IconTypes = [ordered]@{ png = 'image/png'; svg = 'image/svg+xml'; ico = 'image/x-icon' }
+
+function Get-IconDir { Join-Path $ToolUpdateStore 'icons' }
+
+function Get-ToolIconFile([string]$Id) {
+    if ($Id -cnotmatch '^[a-z0-9]+(-[a-z0-9]+)*$') { return $null }
+    foreach ($ext in $script:IconTypes.Keys) {
+        $p = Join-Path (Get-IconDir) "$Id.$ext"
+        if ([IO.File]::Exists($p)) { return @{ Path = $p; Type = $script:IconTypes[$ext] } }
+    }
+    return $null
+}
+
+function Remove-ToolIconFiles([string]$Id) {
+    if ($Id -cnotmatch '^[a-z0-9]+(-[a-z0-9]+)*$') { return }
+    foreach ($ext in $script:IconTypes.Keys) {
+        $p = Join-Path (Get-IconDir) "$Id.$ext"
+        if ([IO.File]::Exists($p)) { [IO.File]::Delete($p) }
+    }
+}
+
+# 檢查並存一張圖示圖片（PNG／ICO 看檔頭；SVG 不能有腳本、事件屬性、外部實體）。回傳副檔名。
+function Save-ToolIconImage([string]$Id, [byte[]]$Bytes) {
+    if (-not $Bytes -or $Bytes.Length -eq 0 -or $Bytes.Length -gt $script:IconMaxBytes) { throw '圖片必須小於 256 KB。' }
+    $ext = $null
+    if ($Bytes.Length -ge 8 -and $Bytes[0] -eq 0x89 -and $Bytes[1] -eq 0x50 -and $Bytes[2] -eq 0x4E -and $Bytes[3] -eq 0x47) { $ext = 'png' }
+    elseif ($Bytes.Length -ge 4 -and $Bytes[0] -eq 0 -and $Bytes[1] -eq 0 -and $Bytes[2] -eq 1 -and $Bytes[3] -eq 0) { $ext = 'ico' }
+    else {
+        $text = [Text.Encoding]::UTF8.GetString($Bytes)
+        if ($text -match '(?is)^\s*(<\?xml[^>]*>\s*)?(<!--.*?-->\s*)*<svg[\s>]') {
+            if ($text -match '(?i)<script|<foreignobject|<!entity|<!doctype|\son[a-z]+\s*=|javascript:|data:text/html|<iframe|<embed|<object') {
+                throw 'SVG 含有腳本或外部內容，不能當圖示。'
+            }
+            $ext = 'svg'
+        }
+    }
+    if (-not $ext) { throw '只接受 PNG、SVG 或 ICO 圖片。' }
+    [void][IO.Directory]::CreateDirectory((Get-IconDir))
+    Remove-ToolIconFiles $Id
+    [IO.File]::WriteAllBytes((Join-Path (Get-IconDir) "$Id.$ext"), $Bytes)
+    return $ext
+}
+
+function Set-ToolIcon($Library, [string]$Id, [string]$Kind, [string]$Value) {
+    $Library.icons = @(@($Library.icons) | Where-Object { $_ -and $_.id -cne $Id })
+    if ($Kind) { $Library.icons += [pscustomobject]@{ id = $Id; kind = $Kind; value = $Value } }
+}
+
+function Get-ToolIconView($Library, [string]$Id) {
+    $rec = @($Library.icons) | Where-Object { $_ -and $_.id -ceq $Id } | Select-Object -First 1
+    if (-not $rec) { return $null }
+    if ($rec.kind -eq 'image') {
+        $f = Get-ToolIconFile $Id
+        if (-not $f) { return $null }
+        $stamp = [IO.File]::GetLastWriteTimeUtc($f.Path).Ticks
+        return [pscustomobject]@{ kind = 'image'; value = "/api/icon?id=$Id&v=$stamp" }
+    }
+    return [pscustomobject]@{ kind = [string]$rec.kind; value = [string]$rec.value }
 }
 
 function Save-ToolLibrary($Library) {
@@ -146,6 +213,7 @@ function Get-HubLibraryTools([switch]$IncludeCatalog) {
     }
     foreach ($tool in $tools.Values) {
         $tool | Add-Member -NotePropertyName Hidden -NotePropertyValue ($tool.Id -in $library.hidden)
+        $tool | Add-Member -NotePropertyName CustomIcon -NotePropertyValue (Get-ToolIconView $library $tool.Id)
         $tool
     }
 }

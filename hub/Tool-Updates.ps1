@@ -245,6 +245,8 @@ function Select-ToolRelease($Tool, [string]$Repo, [string]$HubVersion, $Releases
             $notes = [string]$release.body
             return [pscustomobject]@{
                 version = $text
+                # Release 頁面（安裝視窗的「在 GitHub 查看」）；只接受 github.com 的網址
+                page = $(if ([string]$release.html_url -match '^https://github\.com/') { [string]$release.html_url } else { '' })
                 url = "$baseUrl/$($package.name)"
                 sha256 = $hash
                 size = $size

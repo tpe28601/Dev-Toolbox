@@ -13,23 +13,28 @@
 </head>
 <body class="tb-app">
   <div class="tb-shell hub-shell">
-    <aside class="tb-side" aria-label="工具列表">
+    <aside class="tb-side hub-side" id="hubSide" aria-label="工具列表">
       <div class="tb-brand">
-        <span class="tb-brand__logo"><i data-tb-icon="terminal" data-size="18"></i></span>
+        <button class="tb-brand__logo hub-brand-logo" id="brandLogo" type="button" title="Dev-Toolbox" aria-label="Dev-Toolbox">
+          <span class="hub-brand-logo__main"><i data-tb-icon="terminal" data-size="18"></i></span>
+          <span class="hub-brand-logo__open" aria-hidden="true"><i data-hub-icon="panel-left-open" data-size="18"></i></span>
+        </button>
         <div class="tb-brand__text">
           <h1 class="tb-brand__name">Dev-Toolbox</h1>
           <div class="tb-brand__sub" id="hubVersion">&nbsp;</div>
         </div>
+        <button class="tb-btn tb-btn--icon tb-btn--ghost hub-side-toggle" id="sideToggle" type="button" title="收合側欄" aria-label="收合側欄" aria-pressed="false"><i data-hub-icon="panel-left-close"></i></button>
       </div>
       <nav class="tb-nav hub-nav--page" aria-label="頁面">
         <a class="tb-nav__item" href="?page=dash" id="navDash" title="總覽"><i data-tb-icon="layout-dashboard" data-anim="pop"></i><span class="tb-nav__label">總覽</span></a>
-        <a class="tb-nav__item" href="?page=manage" id="navManage" title="管理工具"><i data-tb-icon="package"></i><span class="tb-nav__label">管理工具</span></a>
       </nav>
       <div class="hub-side__group">工具</div>
       <nav class="tb-nav" id="toolNav" aria-label="工具"></nav>
       <div class="hub-side-bottom">
+        <a class="tb-nav__item" href="?page=manage" id="navManage" title="管理工具"><i data-hub-icon="layers" data-anim="bounce"></i><span class="tb-nav__label">管理工具</span></a>
         <a class="tb-nav__item" href="#" id="navTheme" title="切換深淺色"><i data-tb-icon="monitor"></i><span class="tb-nav__label">主題</span></a>
         <a class="tb-nav__item" href="?page=settings" id="navSettings" title="設定"><i data-tb-icon="settings" data-anim="spin"></i><span class="tb-nav__label">設定</span></a>
+        <button class="tb-nav__item hub-nav--danger" id="navShutdown" type="button" title="關閉 Hub（由 Hub 啟動的工具也會停止）"><i data-hub-icon="power" data-anim="pulse"></i><span class="tb-nav__label">關閉 HUB</span></button>
       </div>
       <div class="tb-side__foot" id="hubInfo">本機工具，只綁定 127.0.0.1</div>
     </aside>
@@ -37,18 +42,19 @@
     <main class="tb-main">
       <!-- 總覽頁（預設首頁）：每個工具一張狀態卡（快速操作懸浮浮現）＋最近的工作 -->
       <section class="hub-page tb-hidden" id="pageDash">
-        <div class="tb-content hub-dash">
+        <div class="tb-content hub-page-body hub-dash">
           <div class="tb-page-head">
             <div>
               <h2 class="tb-page-head__title">總覽</h2>
               <div class="tb-page-head__sub" id="dashSummary">讀取中…</div>
             </div>
-            <div class="tb-row tb-row--end hub-dash__actions">
+            <div class="hub-head-actions">
               <button class="tb-btn" id="dashRefresh" type="button" title="重新整理工具狀態"><i data-tb-icon="refresh-cw" data-anim="spin"></i>重新整理</button>
-              <button class="tb-btn tb-btn--danger" id="dashShutdown" type="button"><i data-tb-icon="square" data-anim="pop"></i>關閉 HUB</button>
             </div>
           </div>
           <div class="hub-dash-grid" id="dashGrid"></div>
+          <div class="hub-act-head tb-hidden" id="dashLinksHead"><i data-hub-icon="link"></i><span>連結</span></div>
+          <div class="hub-dash-grid" id="dashLinks"></div>
           <div class="tb-card hub-empty tb-hidden" id="dashEmpty">
             <p>尚未顯示任何工具。</p><a class="tb-btn" href="?page=manage">管理工具</a>
           </div>
@@ -64,9 +70,11 @@
             <span class="hub-toolbar__name" id="toolName"></span>
             <span class="tb-badge" id="toolBadge"></span>
             <span class="tb-muted tb-small hub-toolbar__status" id="toolStatus" role="status" aria-live="polite"></span>
+            <span class="tb-small hub-toolbar__note tb-hidden" id="toolNote"></span>
           </div>
           <div class="tb-row">
             <button class="tb-btn tb-btn--primary tb-hidden" id="toolUpdate" type="button"></button>
+            <button class="tb-btn tb-btn--primary tb-hidden" id="btnStart" type="button"><i data-tb-icon="play" data-anim="nudge"></i>啟動</button>
             <button class="tb-btn tb-btn--danger" id="btnStop" type="button"><i data-tb-icon="square" data-anim="pop"></i>停止</button>
             <button class="tb-btn tb-btn--icon" id="btnReload" type="button" title="重新載入"><i data-tb-icon="refresh-cw" data-anim="spin"></i></button>
             <button class="tb-btn tb-btn--icon" id="btnPopout" type="button" title="在新視窗開啟"><i data-tb-icon="external-link" data-anim="nudge"></i></button>
@@ -97,25 +105,30 @@
 
       <!-- 設定頁 -->
       <section class="hub-page tb-hidden" id="pageManage">
-        <div class="tb-content">
+        <div class="tb-content hub-page-body">
           <div class="tb-page-head">
-            <div><h1 class="tb-page-head__title">管理工具</h1></div>
-            <div class="hub-library-actions">
-              <button class="tb-btn" type="button" id="importTool">匯入本機工具</button>
-              <button class="tb-btn tb-btn--primary" type="button" id="addLink">新增網站連結</button>
+            <div>
+              <h2 class="tb-page-head__title">管理工具</h2>
+              <div class="tb-page-head__sub">已安裝的工具、網站連結，以及可以安裝的官方工具。</div>
+            </div>
+            <div class="hub-head-actions">
+              <button class="tb-btn" type="button" id="importTool"><i data-tb-icon="folder-open" data-anim="bounce"></i>匯入本機工具</button>
+              <button class="tb-btn tb-btn--primary" type="button" id="addLink"><i data-tb-icon="plus" data-anim="pop"></i>新增網站連結</button>
             </div>
           </div>
           <div class="hub-library-list" id="libraryList"></div>
         </div>
       </section>
       <section class="hub-page tb-hidden" id="pageSettings">
-        <div class="tb-content">
+        <div class="tb-content hub-page-body">
           <div class="tb-page-head">
             <div>
               <h2 class="tb-page-head__title">設定</h2>
               <div class="tb-page-head__sub">存在 Hub 的資料夾；由 Hub 啟動的工具會自動套用。</div>
             </div>
-            <button class="tb-btn tb-btn--primary tb-hidden" id="hubUpdate" type="button"></button>
+            <div class="hub-head-actions">
+              <button class="tb-btn tb-btn--primary tb-hidden" id="hubUpdate" type="button"></button>
+            </div>
           </div>
           <div class="tb-grid tb-grid--2">
             <div class="tb-card">
@@ -132,9 +145,25 @@
                   <div class="tb-swatches" id="swatches" role="group" aria-label="強調色"></div>
                   <span class="tb-field__hint">切換後，嵌入的工具會立即跟著變。</span>
                 </div>
-                <div class="tb-field"><span class="tb-field__label">主題風格</span>
-                  <div class="tb-seg hub-seg-wrap" role="group" aria-label="主題風格" id="bgSeg">
-                    <button class="tb-seg__btn" data-bg="plain" type="button">純色</button>
+                <div class="tb-field" id="bgSeg"><span class="tb-field__label">主題風格</span>
+                  <span class="tb-field__hint hub-bg-group">純色</span>
+                  <div class="tb-seg hub-seg-wrap" role="group" aria-label="主題風格：純色">
+                    <button class="tb-seg__btn" data-bg="graphite" type="button">石墨</button>
+                    <button class="tb-seg__btn" data-bg="warm" type="button">暖灰</button>
+                    <button class="tb-seg__btn" data-bg="nord" type="button">冷灰藍</button>
+                    <button class="tb-seg__btn" data-bg="contrast" type="button">高對比</button>
+                    <button class="tb-seg__btn" data-bg="black" type="button">純黑</button>
+                    <button class="tb-seg__btn" data-bg="plain" type="button">經典</button>
+                  </div>
+                  <span class="tb-field__hint hub-bg-group">質感</span>
+                  <div class="tb-seg hub-seg-wrap" role="group" aria-label="主題風格：質感">
+                    <button class="tb-seg__btn" data-bg="glass" type="button">液態玻璃</button>
+                    <button class="tb-seg__btn" data-bg="frost" type="button">磨砂</button>
+                    <button class="tb-seg__btn" data-bg="metal" type="button">金屬</button>
+                    <button class="tb-seg__btn" data-bg="pearl" type="button">珠光</button>
+                  </div>
+                  <span class="tb-field__hint hub-bg-group">紋理</span>
+                  <div class="tb-seg hub-seg-wrap" role="group" aria-label="主題風格：紋理">
                     <button class="tb-seg__btn" data-bg="glow" type="button">光暈</button>
                     <button class="tb-seg__btn" data-bg="grid" type="button">網格</button>
                     <button class="tb-seg__btn" data-bg="dots" type="button">點陣</button>
@@ -143,14 +172,7 @@
                     <button class="tb-seg__btn" data-bg="mono" type="button">黑白</button>
                     <button class="tb-seg__btn" data-bg="cyber" type="button">霓虹</button>
                   </div>
-                  <span class="tb-field__hint">會改變整個 Hub 的色調與紋理；光暈會跟著強調色變色。不影響嵌入的工具頁面。</span>
-                </div>
-                <div class="tb-field"><span class="tb-field__label">風格強度</span>
-                  <div class="tb-seg" role="group" aria-label="風格強度" id="strengthSeg">
-                    <button class="tb-seg__btn" data-strength="bold" type="button">明顯</button>
-                    <button class="tb-seg__btn" data-strength="soft" type="button">內斂</button>
-                  </div>
-                  <span class="tb-field__hint">明顯：表面半透明毛玻璃、紋理清楚；內斂：只微調色調、表面不透明。</span>
+                  <span class="tb-field__hint">預設是石墨（中性灰，藍色只用在強調色）。強調色可以和任何風格搭配；光暈、液態玻璃的光斑會跟著強調色。不影響嵌入的工具頁面。</span>
                 </div>
               </div>
             </div>
@@ -176,7 +198,16 @@
               </div>
             </div>
           </div>
-          <button class="tb-btn tb-btn--danger" id="resetHubSettings" type="button">重設 Hub 設定</button>
+          <div class="tb-card hub-advanced">
+            <h3 class="tb-section-title"><i data-tb-icon="triangle-alert"></i>進階</h3>
+            <div class="hub-advanced__row">
+              <div>
+                <div class="tb-choice__title">重設 Hub 設定</div>
+                <div class="tb-muted tb-small">清除外觀、Python 路徑、匯入的本機工具登記、網站連結與「顯示在 Hub」設定。已安裝的工具程式與工具自己的資料都會保留。</div>
+              </div>
+              <button class="tb-btn tb-btn--danger" id="resetHubSettings" type="button">重設 Hub 設定</button>
+            </div>
+          </div>
         </div>
       </section>
     </main>
@@ -190,18 +221,17 @@
       <div class="hub-library-fields" id="importFields">
         <label for="libraryPath">工具資料夾</label>
         <div class="tb-input-row"><input class="tb-input" id="libraryPath"><button class="tb-btn" type="button" id="libraryBrowse">瀏覽…</button></div>
-        <span class="tb-muted">選擇包含 tool.json 的資料夾。</span>
+        <span class="tb-muted">選擇包含 tool.json 的資料夾，也可以直接貼上路徑。</span>
+        <div class="tb-callout hub-browse-wait" id="libraryBrowseWait" hidden>
+          <span id="libraryBrowseWaitText">資料夾選擇視窗已開啟，請在該視窗選擇資料夾（可能在其他視窗後面）。</span>
+          <button class="tb-btn tb-btn--sm" type="button" id="libraryBrowseCancel">取消選擇</button>
+        </div>
       </div>
       <div class="hub-library-fields" id="linkFields">
         <label class="hub-library-fields">名稱<input class="tb-input" id="libraryName" maxlength="60"></label>
         <label class="hub-library-fields">網址<input class="tb-input" id="libraryUrl" type="url" maxlength="2048" placeholder="https://"></label>
         <label class="hub-library-fields">簡介（選填）<input class="tb-input" id="libraryDescription" maxlength="200"></label>
-        <label class="hub-library-fields">圖示（選填）
-          <select class="tb-select" id="libraryIcon">
-            <option value="">預設</option><option value="file-code">程式碼</option><option value="terminal">終端機</option>
-            <option value="bookmark">書籤</option><option value="settings">設定</option>
-          </select>
-        </label>
+        <span class="tb-muted tb-small">儲存後可以在「管理工具」的「⋯ → 更換圖示」換成圖示、emoji、圖片或網站圖示。</span>
       </div>
       <p class="hub-library-error" id="libraryError" role="alert"></p>
       <div class="tb-dialog__actions">
@@ -209,6 +239,42 @@
         <button class="tb-btn tb-btn--primary" type="submit" id="librarySave">儲存</button>
       </div>
     </form>
+  </dialog>
+  <dialog class="tb-dialog hub-icon-dialog" id="iconDialog" aria-labelledby="iconTitle">
+    <h2 class="tb-dialog__title" id="iconTitle">更換圖示</h2>
+    <div class="hub-icon-preview"><span class="hub-icon-preview__box" id="iconPreview"></span><span class="tb-muted tb-small" id="iconPreviewText"></span></div>
+    <div class="tb-seg hub-icon-tabs" role="tablist" aria-label="圖示來源">
+      <button class="tb-seg__btn" type="button" role="tab" data-icon-tab="name">圖示</button>
+      <button class="tb-seg__btn" type="button" role="tab" data-icon-tab="emoji">Emoji</button>
+      <button class="tb-seg__btn" type="button" role="tab" data-icon-tab="image">上傳圖片</button>
+      <button class="tb-seg__btn" type="button" role="tab" data-icon-tab="favicon" id="iconTabFavicon">網站圖示</button>
+    </div>
+    <div class="hub-icon-pane" data-icon-pane="name">
+      <input class="tb-input" id="iconSearch" type="search" placeholder="搜尋圖示（英文或中文，例如 資料庫、chart）" autocomplete="off">
+      <div class="hub-icon-grid" id="iconGrid" role="listbox" aria-label="圖示"></div>
+    </div>
+    <div class="hub-icon-pane" data-icon-pane="emoji" hidden>
+      <label class="hub-library-fields">輸入或貼上一個 emoji
+        <input class="tb-input hub-icon-emoji" id="iconEmoji" maxlength="16" autocomplete="off" placeholder="🚀"></label>
+      <div class="hub-icon-emoji-quick" id="iconEmojiQuick"></div>
+      <span class="tb-muted tb-small">Windows 可以按 Win + . 開啟 emoji 面板。</span>
+    </div>
+    <div class="hub-icon-pane" data-icon-pane="image" hidden>
+      <label class="hub-library-fields">選擇圖片（PNG、SVG 或 ICO，小於 256 KB）
+        <input class="tb-input" id="iconFile" type="file" accept=".png,.svg,.ico,image/png,image/svg+xml,image/x-icon"></label>
+      <span class="tb-muted tb-small">圖片會存在 Hub 的資料夾，不會放進任何 repo。</span>
+    </div>
+    <div class="hub-icon-pane" data-icon-pane="favicon" hidden>
+      <p class="tb-muted tb-small">按下「抓取」時，Hub 會連到這個網站下載它的圖示（favicon.ico），存在本機；之後不需要再連網。</p>
+      <button class="tb-btn" type="button" id="iconFetch"><i data-tb-icon="download" data-anim="bounce"></i>抓取網站圖示</button>
+    </div>
+    <p class="hub-library-error" id="iconError" role="alert"></p>
+    <div class="tb-dialog__actions hub-icon-actions">
+      <button class="tb-btn tb-btn--ghost" type="button" id="iconReset">恢復預設</button>
+      <span class="hub-icon-actions__spacer"></span>
+      <button class="tb-btn" type="button" id="iconCancel">取消</button>
+      <button class="tb-btn tb-btn--primary" type="button" id="iconSave">套用</button>
+    </div>
   </dialog>
   <dialog class="tb-dialog hub-library-dialog" id="installProgress" aria-labelledby="installProgressTitle">
     <h3 class="tb-dialog__title" id="installProgressTitle"></h3>
@@ -219,7 +285,9 @@
       <span class="tb-dialog__icon" id="confirmIcon"></span>
       <h3 class="tb-dialog__title" id="confirmTitle">確認</h3>
       <div class="tb-dialog__body" id="confirmText"></div>
+      <div class="tb-dialog__body hub-md tb-hidden" id="confirmNotes"></div>
       <div class="tb-dialog__actions">
+        <button class="tb-btn tb-btn--ghost hub-confirm-link tb-hidden" id="confirmLink" type="button"><i data-hub-icon="github"></i><span>在 GitHub 查看</span></button>
         <button class="tb-btn" id="confirmCancel" type="button">取消</button>
         <button class="tb-btn tb-btn--danger" id="confirmOk" type="button">確定</button>
       </div>
@@ -227,6 +295,7 @@
   </div>
 
   <script src="/tb-icons.js"></script>
+  <script src="/hub-icons.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
