@@ -61,6 +61,7 @@ try {
         'build-runner' = @('Run-CLI.bat', 'Run-Web.bat')
         'hlk-viewer' = @('Launch-HLK.ps1', 'HLK-Web.ps1')
         'key-manager' = @('run_windows.bat')
+        'script-editor' = @('Run-Script-Editor.bat', 'Launch-SE.ps1', 'Script-Web.ps1')
     }
     Install-ToolRelease $store $tool $offer {
         foreach ($file in @('Standalone-Update.ps1', 'Tool-Updates.ps1') + $launcher[$tool.Id]) {

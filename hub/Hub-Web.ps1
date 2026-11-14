@@ -53,27 +53,8 @@ foreach ($d in @($script:DataDir, (Join-Path $script:DataDir 'jobs'))) {
 }
 
 # ---------------- 工具清單（讀 tools\*\tool.json，與 hub.ps1 同邏輯） ----------------
-function Get-Tools {
-    $list = @()
-    $toolsDir = Join-Path $InstallationRoot 'tools'
-    foreach ($dir in @(Get-ChildItem -LiteralPath $toolsDir -Directory -ErrorAction SilentlyContinue)) {
-        $manifest = Join-Path $dir.FullName 'tool.json'
-        if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
-            $list += [pscustomobject]@{ Id = $dir.Name; Name = $dir.Name; Version = ''; Installed = $false; Dir = $dir.FullName; Manifest = $null; Error = '沒有 tool.json（submodule 未初始化？）' }
-            continue
-        }
-        try {
-            $m = Read-JsonFile $manifest
-            $activeDir = Resolve-ToolUpdateDir $ToolUpdateStore $m.id $m.version $dir.FullName
-            if ($activeDir -ne $dir.FullName) { $m = Read-JsonFile (Join-Path $activeDir 'tool.json') }
-            $list += [pscustomobject]@{ Id = [string]$m.id; Name = [string]$m.name; Version = [string]$m.version; Installed = $true; Dir = $activeDir; Manifest = $m; Error = $null }
-        } catch {
-            $list += [pscustomobject]@{ Id = $dir.Name; Name = $dir.Name; Version = ''; Installed = $false; Dir = $dir.FullName; Manifest = $null; Error = "tool.json 無法解析：$($_.Exception.Message)" }
-        }
-    }
-    return $list
-}
-
+. (Join-Path $PSScriptRoot 'Tool-Library.ps1')
+function Get-Tools { Get-HubLibraryTools -IncludeCatalog }
 
 # ---------------- 執行中的工具服務 ----------------
 # $script:ToolProcs[id] = @{ Proc; Port; Url; OutFile; ErrFile; StartedAt }
@@ -148,6 +129,10 @@ function Get-PythonVersion([string]$Exe) {
 function Get-PythonCandidates([string]$ToolDir) {
     # 依優先順序列出所有來源（含找不到的），給設定頁顯示與 Resolve-PythonExe 共用
     $list = @()
+    if ($ToolDir) {
+        $bundled = Join-Path $ToolDir 'runtime\python\python.exe'
+        $list += [pscustomobject]@{ source = 'bundled'; label = '工具附帶的 Python'; path = $bundled; found = (Test-Path -LiteralPath $bundled -PathType Leaf) }
+    }
     $sp = [string](Get-HubSettings).pythonPath
     $list += [pscustomobject]@{ source = 'settings'; label = 'Hub 設定指定的路徑'; path = $sp; found = [bool]($sp -and (Test-Path -LiteralPath $sp -PathType Leaf)) }
     $ev = [string]$env:DEVTOOLBOX_PYTHON
@@ -167,7 +152,6 @@ function Get-PythonCandidates([string]$ToolDir) {
 }
 
 function Resolve-PythonExe([string]$ToolDir) {
-    # 依序：Hub 設定 pythonPath > DEVTOOLBOX_PYTHON > 工具內建 .venv > py 啟動器 > PATH 上的 python（跳過 WindowsApps）
     foreach ($c in @(Get-PythonCandidates $ToolDir)) {
         if ($c.found) { return $c.path }
     }
@@ -221,6 +205,15 @@ function Start-ToolService([string]$Id) {
     $t = @(Get-Tools | Where-Object { $_.Id -eq $Id }) | Select-Object -First 1
     if (-not $t) { throw @{ code = 'TOOL_NOT_FOUND'; message = "找不到工具：$Id" } }
     if (-not $t.Installed) { throw @{ code = 'ENV_MISSING'; message = "$Id：$($t.Error)" } }
+    if ($t.Source -eq 'link') { Open-ToolLink $t.Url; return @{ opened = $true } }
+    if (-not $t.Manifest.web -and $t.Manifest.cli) {
+        if ($t.Id -cnotmatch '^[a-z0-9]+(-[a-z0-9]+)*$') { throw '工具 ID 不符合工具規格。' }
+        $cli = Join-Path $PSScriptRoot 'hub.ps1'
+        $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', ('"{0}"' -f $cli),
+            '-InstallationRoot', ('"{0}"' -f $InstallationRoot), 'run', $t.Id)
+        Start-Process -FilePath 'powershell.exe' -ArgumentList $args -WorkingDirectory $t.Dir
+        return @{ opened = $true }
+    }
     if ($script:ToolProcs.ContainsKey($Id)) { throw @{ code = 'ALREADY_RUNNING'; message = "$Id 已在執行（port $($script:ToolProcs[$Id].Port)）" } }
     $st = Get-ToolStatus $t
     if ($st) { throw @{ code = 'ALREADY_RUNNING'; message = "$Id 已在 127.0.0.1:$($st.port) 運行（非 Hub 啟動）" } }
@@ -342,6 +335,7 @@ function Get-RuntimeDetail($t) {
     $tag = switch ($first.source) {
         'settings' { 'Hub 設定' }
         'venv'     { '工具 .venv' }
+        'bundled'  { '工具附帶' }
         'env'      { '環境變數' }
         default    { '自動偵測' }
     }
@@ -483,17 +477,24 @@ function Get-ToolsView {
     $out = @()
     foreach ($t in @(Get-Tools)) {
         $running = $null
-        if ($t.Installed) { $running = Get-ToolStatus $t }
+        $local = $t.Installed -and $t.Source -ne 'link'
+        if ($local) { $running = Get-ToolStatus $t }
         $out += [pscustomobject]@{
             id        = $t.Id
             name      = $t.Name
             version   = $t.Version
             installed = $t.Installed
-            canUpdate = $t.Installed -and $script:ToolReleaseRepos.ContainsKey($t.Id)
+            canUpdate = $local -and $script:OfficialToolNames.Contains($t.Id)
+            source    = $t.Source
+            hidden    = $t.Hidden
+            url       = $t.Url
+            path      = $t.ImportPath
+            icon      = [string]$t.Manifest.icon
             error     = $t.Error
             runtime   = if ($t.Installed) { [string]$t.Manifest.runtime.kind } else { '' }
-            runtimeDetail = if ($t.Installed) { Get-RuntimeDetail $t } else { '' }
+            runtimeDetail = if ($local) { Get-RuntimeDetail $t } else { '' }
             web       = [bool]($t.Installed -and $t.Manifest.web)
+            cli       = [bool]($t.Installed -and $t.Manifest.cli)
             desc      = if ($t.Installed) { [string]$t.Manifest.description } else { '' }
             port      = if ($t.Installed -and $t.Manifest.web) { [int]$t.Manifest.web.defaultPort } else { 0 }
             running   = $running
@@ -623,8 +624,8 @@ function Get-UpdatableTool([string]$Id) {
     if ($Id -ceq 'dev-toolbox') {
         return [pscustomobject]@{ Id = $Id; Version = [string]$script:HubManifest.version; Dir = $HubRoot }
     }
-    $tool = @(Get-Tools | Where-Object { $_.Installed -and $_.Id -ceq $Id })
-    if ($tool.Count -ne 1 -or -not $script:ToolReleaseRepos.ContainsKey($Id)) {
+    $tool = @(Get-Tools | Where-Object { $_.Id -ceq $Id -and $_.Source -in 'bundled','managed','catalog','import' })
+    if ($tool.Count -ne 1 -or (-not $tool[0].Installed -and $tool[0].Source -ne 'catalog') -or -not $script:OfficialToolNames.Contains($Id)) {
         throw @{ code = 'NO_UPDATE_SOURCE'; message = '找不到可更新的工具。' }
     }
     return $tool[0]
@@ -667,7 +668,8 @@ function Invoke-ToolUpdate($Tool, $Offer, [bool]$RestartConfirmed) {
     if ($running -and -not $running.managed) { throw '請先關閉在 Hub 外啟動的工具，再重新更新。' }
     if ($running -and -not $RestartConfirmed) { throw '工具已開始執行，請重新檢查更新並確認重新啟動。' }
     $state = @{ stopped = $false }
-    return (Install-ToolRelease $ToolUpdateStore $Tool $Offer {
+    $store = if ($Tool.Source -eq 'import') { Get-ImportedToolStore $Tool.ImportPath } else { $ToolUpdateStore }
+    return (Install-ToolRelease $store $Tool $Offer {
         if ($running) {
             $proc = $script:ToolProcs[$id].Proc
             # Let update fail if the tool refuses to stop, without force-killing active work.
@@ -692,6 +694,53 @@ function Invoke-ToolUpdate($Tool, $Offer, [bool]$RestartConfirmed) {
     } {
         if ($state.stopped) { Start-ToolService $id | Out-Null }
     })
+}
+
+function Update-ToolLibrary($Body) {
+    $library = Get-ToolLibrary
+    $id = [string]$Body.id
+    $tool = Get-Tools | Where-Object Id -CEQ $id | Select-Object -First 1
+    switch ($Body.action) {
+        'import' {
+            $path = ([string]$Body.path).Trim().Trim('"')
+            if ($path -notmatch '^[A-Za-z]:[\\/]') { throw '請指定本機工具資料夾的完整路徑。' }
+            $path = [IO.Path]::GetFullPath($path)
+            $manifest = Read-ImportedTool $path
+            $existing = Get-Tools | Where-Object Id -CEQ $manifest.id | Select-Object -First 1
+            if ($existing -and $existing.Source -ne 'catalog') { throw 'Hub 已有相同 ID 的工具。' }
+            $library.imports = @($library.imports) + @{ id = $manifest.id; name = $manifest.name; path = $path }
+        }
+        'link' {
+            if ($id -and $tool.Source -ne 'link') { throw '找不到這個網站連結。' }
+            $name = ([string]$Body.name).Trim()
+            $desc = ([string]$Body.description).Trim()
+            $icon = ([string]$Body.icon).Trim()
+            if (-not $name -or $name.Length -gt 60 -or $desc.Length -gt 200 -or $icon -notin '','external-link','file-code','terminal','bookmark','book','settings') {
+                throw '請檢查名稱、簡介和圖示。'
+            }
+            if (-not $id) { $id = 'link-' + [guid]::NewGuid().ToString('N') }
+            $link = @{ id = $id; name = $name; url = ConvertTo-ToolLink ([string]$Body.url); description = $desc; icon = $icon }
+            $updated = $false
+            $library.links = @(foreach ($record in $library.links) {
+                if ($record.id -ceq $id) { $link; $updated = $true } else { $record }
+            })
+            if (-not $updated) { $library.links += $link }
+        }
+        'visibility' {
+            if (-not $tool -or $tool.Source -eq 'catalog' -or $Body.hidden -isnot [bool]) { throw '找不到可設定顯示的工具。' }
+            $library.hidden = @($library.hidden | Where-Object { $_ -cne $id })
+            if ($Body.hidden) { $library.hidden += $id }
+        }
+        'remove' {
+            if ($tool.Source -notin 'import','link') { throw '只能移除匯入的工具或網站連結。' }
+            if ($tool.Source -eq 'import' -and $script:ToolProcs.ContainsKey($id)) { throw '請先停止工具再移除。' }
+            $library.imports = @($library.imports | Where-Object id -CNE $id)
+            $library.links = @($library.links | Where-Object id -CNE $id)
+            $library.hidden = @($library.hidden | Where-Object { $_ -cne $id })
+        }
+        default { throw '不支援的工具管理操作。' }
+    }
+    Save-ToolLibrary $library
 }
 
 function Route-Request($req, $ctx) {
@@ -760,6 +809,26 @@ function Route-Request($req, $ctx) {
 
     # POST
     switch ($path) {
+        '/api/tools/library' {
+            try { Update-ToolLibrary (Read-JsonBody $req) }
+            catch { throw @{ code = 'LIBRARY_ERROR'; message = $_.Exception.Message } }
+            Send-JsonRaw $ctx @{ ok = $true }
+            return
+        }
+        '/api/tools/folder' {
+            Add-Type -AssemblyName System.Windows.Forms
+            $picker = New-Object Windows.Forms.FolderBrowserDialog
+            $picker.Description = '選擇包含 tool.json 的工具資料夾'
+            $picker.ShowNewFolderButton = $false
+            $owner = New-Object Windows.Forms.Form
+            try {
+                $owner.ShowInTaskbar = $false
+                $owner.TopMost = $true
+                $result = if ($picker.ShowDialog($owner) -eq 'OK') { $picker.SelectedPath }
+                Send-JsonRaw $ctx @{ ok = $true; path = $result }
+            } finally { $picker.Dispose(); $owner.Dispose() }
+            return
+        }
         '/api/tools/update/check' {
             $b = Read-JsonBody $req
             $t = Get-UpdatableTool ([string]$b.id)
@@ -785,6 +854,8 @@ function Route-Request($req, $ctx) {
             if ($t.Id -eq 'dev-toolbox') {
                 if ($b.restart -isnot [bool] -or -not $b.restart) { throw '請確認重新啟動 Hub。' }
                 $result = Invoke-HubUpdate $t $checked.offer
+            } elseif ($t.Source -eq 'catalog') {
+                $result = Install-ToolRelease $ToolUpdateStore $t $checked.offer {} {} {}
             } else {
                 $result = Invoke-ToolUpdate $t $checked.offer ($b.restart -is [bool] -and $b.restart)
             }

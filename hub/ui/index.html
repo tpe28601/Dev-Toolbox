@@ -23,6 +23,7 @@
       </div>
       <nav class="tb-nav hub-nav--page" aria-label="頁面">
         <a class="tb-nav__item" href="?page=dash" id="navDash" title="總覽"><i data-tb-icon="layout-dashboard" data-anim="pop"></i><span class="tb-nav__label">總覽</span></a>
+        <a class="tb-nav__item" href="?page=manage" id="navManage" title="管理工具"><i data-tb-icon="package"></i><span class="tb-nav__label">管理工具</span></a>
       </nav>
       <div class="hub-side__group">工具</div>
       <nav class="tb-nav" id="toolNav" aria-label="工具"></nav>
@@ -48,6 +49,9 @@
             </div>
           </div>
           <div class="hub-dash-grid" id="dashGrid"></div>
+          <div class="tb-card hub-empty tb-hidden" id="dashEmpty">
+            <p>尚未顯示任何工具。</p><a class="tb-btn" href="?page=manage">管理工具</a>
+          </div>
           <div class="hub-act-head" id="dashActsHead"><i data-tb-icon="history"></i><span>最近的工作</span></div>
           <div class="hub-act-list" id="dashActs"></div>
         </div>
@@ -92,6 +96,18 @@
       </section>
 
       <!-- 設定頁 -->
+      <section class="hub-page tb-hidden" id="pageManage">
+        <div class="tb-content">
+          <div class="tb-page-head">
+            <div><h1 class="tb-page-head__title">管理工具</h1></div>
+            <div class="hub-library-actions">
+              <button class="tb-btn" type="button" id="importTool">匯入本機工具</button>
+              <button class="tb-btn tb-btn--primary" type="button" id="addLink">新增網站連結</button>
+            </div>
+          </div>
+          <div class="hub-library-list" id="libraryList"></div>
+        </div>
+      </section>
       <section class="hub-page tb-hidden" id="pageSettings">
         <div class="tb-content">
           <div class="tb-page-head">
@@ -167,6 +183,32 @@
 
   <div class="tb-toast-area" id="toastArea" aria-live="polite"></div>
 
+  <dialog class="tb-dialog hub-library-dialog" id="libraryDialog" aria-labelledby="libraryTitle">
+    <form id="libraryForm">
+      <h2 class="tb-dialog__title" id="libraryTitle"></h2>
+      <div class="hub-library-fields" id="importFields">
+        <label for="libraryPath">工具資料夾</label>
+        <div class="tb-input-row"><input class="tb-input" id="libraryPath"><button class="tb-btn" type="button" id="libraryBrowse">瀏覽…</button></div>
+        <span class="tb-muted">選擇包含 tool.json 的資料夾。</span>
+      </div>
+      <div class="hub-library-fields" id="linkFields">
+        <label class="hub-library-fields">名稱<input class="tb-input" id="libraryName" maxlength="60"></label>
+        <label class="hub-library-fields">網址<input class="tb-input" id="libraryUrl" type="url" maxlength="2048" placeholder="https://"></label>
+        <label class="hub-library-fields">簡介（選填）<input class="tb-input" id="libraryDescription" maxlength="200"></label>
+        <label class="hub-library-fields">圖示（選填）
+          <select class="tb-select" id="libraryIcon">
+            <option value="">預設</option><option value="file-code">程式碼</option><option value="terminal">終端機</option>
+            <option value="bookmark">書籤</option><option value="settings">設定</option>
+          </select>
+        </label>
+      </div>
+      <p class="hub-library-error" id="libraryError" role="alert"></p>
+      <div class="tb-dialog__actions">
+        <button class="tb-btn" type="button" id="libraryCancel">取消</button>
+        <button class="tb-btn tb-btn--primary" type="submit" id="librarySave">儲存</button>
+      </div>
+    </form>
+  </dialog>
   <div class="tb-dialog-backdrop tb-hidden" id="confirmBackdrop">
     <div class="tb-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
       <span class="tb-dialog__icon" id="confirmIcon"></span>

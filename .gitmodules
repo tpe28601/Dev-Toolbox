@@ -13,3 +13,6 @@
 [submodule "tools/HLK-Viewer"]
 	path = tools/HLK-Viewer
 	url = https://github.com/tpe28601/hlk-viewer.git
+[submodule "tools/Script-Editor"]
+	path = tools/Script-Editor
+	url = https://github.com/tpe28601/script-editor.git

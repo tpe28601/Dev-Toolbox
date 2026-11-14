@@ -9,7 +9,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $css = Join-Path $PSScriptRoot 'ui-kit.css'
 $cli = Join-Path $PSScriptRoot 'cli-kit.ps1'
 $webFiles = @('ui-kit.css', 'tb-theme.js', 'tb-icons.js', 'tb-dirpicker.js')
-$standaloneIds = @('agents-cfg-manager', 'build-runner', 'git-ref-manager', 'hlk-viewer', 'key-manager')
+$standaloneIds = @('agents-cfg-manager', 'build-runner', 'git-ref-manager', 'hlk-viewer', 'key-manager', 'script-editor')
 
 $first = (Get-Content -LiteralPath $css -TotalCount 1 -Encoding UTF8)
 if ($first -notmatch 'ui-kit (\d+\.\d+\.\d+)') { throw 'ui-kit.css 第一行找不到版本號（格式：/* ui-kit 1.2.3 ... */）' }
@@ -36,7 +36,7 @@ foreach ($dir in @(Get-ChildItem -LiteralPath $toolsDir -Directory -ErrorAction 
         $targets += @{ From = (Join-Path $root 'hub\Tool-Updates.ps1'); To = (Join-Path $dir.FullName 'Tool-Updates.ps1') }
         $targets += @{ From = (Join-Path $PSScriptRoot 'Standalone-Update.ps1'); To = (Join-Path $dir.FullName 'Standalone-Update.ps1') }
         $targets += @{ From = (Join-Path $PSScriptRoot 'tb-standalone-update.js'); To = (Join-Path $uiDir 'tb-standalone-update.js') }
-        if ($tool.id -in @('build-runner', 'hlk-viewer', 'key-manager')) {
+        if ($tool.id -in @('build-runner', 'hlk-viewer', 'key-manager', 'script-editor')) {
             $pythonDir = if ($tool.id -eq 'key-manager') { Join-Path $dir.FullName 'src\key_manager\web' } else { $dir.FullName }
             $targets += @{ From = (Join-Path $PSScriptRoot 'standalone_update.py'); To = (Join-Path $pythonDir 'standalone_update.py') }
         }

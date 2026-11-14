@@ -64,7 +64,8 @@ function Get-HubSettingsPython {
 }
 
 function Resolve-HubPython([string]$ToolDir) {
-    # 依序：Hub 設定 pythonPath > DEVTOOLBOX_PYTHON > 工具內建 .venv > py 啟動器 > PATH 上的 python（跳過 WindowsApps 佔位程式）
+    $bundled = Join-Path $ToolDir 'runtime\python\python.exe'
+    if (Test-Path -LiteralPath $bundled -PathType Leaf) { return $bundled }
     $sp = Get-HubSettingsPython
     if ($sp) { return $sp }
     if ($env:DEVTOOLBOX_PYTHON -and (Test-Path -LiteralPath $env:DEVTOOLBOX_PYTHON)) { return $env:DEVTOOLBOX_PYTHON }
@@ -84,30 +85,12 @@ function Get-UiKitVersion([string]$CssPath) {
     return $null
 }
 
-function Get-Tools {
-    $list = @()
-    $toolsDir = Join-Path $InstallationRoot 'tools'
-    foreach ($dir in @(Get-ChildItem -LiteralPath $toolsDir -Directory -ErrorAction SilentlyContinue)) {
-        $manifest = Join-Path $dir.FullName 'tool.json'
-        if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
-            $list += [pscustomobject]@{ Id = $dir.Name; Name = $dir.Name; Version = ''; Installed = $false; Dir = $dir.FullName; Manifest = $null; Error = '沒有 tool.json（submodule 未初始化？）' }
-            continue
-        }
-        try {
-            $m = Read-JsonFile $manifest
-            $activeDir = Resolve-ToolUpdateDir $ToolUpdateStore $m.id $m.version $dir.FullName
-            if ($activeDir -ne $dir.FullName) { $m = Read-JsonFile (Join-Path $activeDir 'tool.json') }
-            $list += [pscustomobject]@{ Id = [string]$m.id; Name = [string]$m.name; Version = [string]$m.version; Installed = $true; Dir = $activeDir; Manifest = $m; Error = $null }
-        } catch {
-            $list += [pscustomobject]@{ Id = $dir.Name; Name = $dir.Name; Version = ''; Installed = $false; Dir = $dir.FullName; Manifest = $null; Error = "tool.json 無法解析：$($_.Exception.Message)" }
-        }
-    }
-    return $list
-}
+. (Join-Path $PSScriptRoot 'Tool-Library.ps1')
+function Get-Tools { Get-HubLibraryTools }
 
 function Invoke-List {
     $tools = @(Get-Tools)
-    if ($tools.Count -eq 0) { Write-TbWarn 'tools\ 底下沒有任何工具。請先執行 Setup.bat。'; return 0 }
+    if ($tools.Count -eq 0) { Write-TbWarn '尚未安裝工具。請開啟 Hub 的「管理工具」。'; return 0 }
     foreach ($t in $tools) {
         if ($t.Installed) { Write-TbOk ("{0,-24} {1,-10} {2}" -f $t.Id, $t.Version, $t.Name) }
         else { Write-TbWarn ("{0,-24} {1}" -f $t.Id, $t.Error) }
@@ -165,6 +148,8 @@ function Invoke-Run([string]$Id, [string[]]$ToolArgs) {
     $t = @(Get-Tools | Where-Object { $_.Id -eq $Id }) | Select-Object -First 1
     if (-not $t) { Write-TbErr "找不到工具：$Id"; $script:RunCode = $script:TbExit.BadArgs; return }
     if (-not $t.Installed) { Write-TbErr "$Id：$($t.Error)"; $script:RunCode = $script:TbExit.Env; return }
+    if ($t.Source -eq 'link') { Open-ToolLink $t.Url; return }
+    if (-not $t.Manifest.cli) { Write-TbErr "$Id 沒有 CLI 入口。"; $script:RunCode = $script:TbExit.BadArgs; return }
     $entry = Join-Path $t.Dir ([string]$t.Manifest.cli.entry)
     switch ([string]$t.Manifest.runtime.kind) {
         'powershell' {
