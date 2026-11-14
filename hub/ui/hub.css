@@ -114,123 +114,6 @@
   .hub-kv { grid-column: 1; grid-row: auto; }
 }
 
-/* ---------- 主題風格（僅 Hub）----------
-   data-hub-bg（hub-bg.js 繪製前先套，優先序 ?bg= > localStorage hub.bg > graphite）直接覆蓋
-   ui-kit 色板 token，改的是整個 Hub 色調；body::before 只負責紋理／光斑層。
-   - 純色系（不透明表面）：graphite 石墨（預設）、warm 暖灰、nord 冷灰藍、contrast 高對比、black 純黑；plain＝經典（ui-kit 原色）
-   - 紋理系（半透明表面）：glow 光暈、grid 網格、dots 點陣、dusk 暮色、forest 森林、mono 黑白、cyber 霓虹、glass 液態玻璃
-   data-hub-strength：bold（明顯：表面半透明、大面板模糊、紋理全開）／soft（內斂：表面不透明、不模糊、紋理 45%）。
-   效能：模糊（backdrop-filter）只套在側欄、工具框、對話框這幾個大面板；卡片只做半透明，
-   不再每張卡片各自模糊（原本關閉對話框時要重畫所有模糊層，比較慢的顯示卡會頓一下）。 */
-:root { --hub-glass: var(--tb-surface); --hub-glass-fx: none; --hub-tex-k: 1; }
-:root[data-hub-strength=soft] { --hub-tex-k: .45; }
-:root:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) {
-  --hub-glass: color-mix(in srgb, var(--tb-surface) 80%, transparent);
-  --hub-glass-fx: saturate(1.15) blur(14px);
-  --tb-border-strong: color-mix(in srgb, var(--tb-border) 80%, var(--tb-text));
-  --tb-scroll: color-mix(in srgb, var(--tb-border) 85%, var(--tb-text)); }
-:root[data-hub-strength=soft]:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) {
-  --hub-glass: var(--tb-surface); --hub-glass-fx: none; }
-:root:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) :is(.tb-side, .tb-card, .hub-framebox) {
-  background: var(--hub-glass); }
-:root:is([data-hub-bg=glow], [data-hub-bg=grid], [data-hub-bg=dots], [data-hub-bg=dusk], [data-hub-bg=forest], [data-hub-bg=mono], [data-hub-bg=cyber]) :is(.tb-side, .hub-framebox) {
-  backdrop-filter: var(--hub-glass-fx); -webkit-backdrop-filter: var(--hub-glass-fx); }
-
-/* ----- 純色系：石墨（預設，中性灰，藍色只留給強調色）、暖灰、冷灰藍、高對比、純黑 ----- */
-:root[data-theme=dark][data-hub-bg=graphite] { --tb-bg: #111214; --tb-surface: #18191c; --tb-surface-2: #1f2024; --tb-surface-3: #27282d;
-  --tb-border: #2e3036; --tb-border-strong: #3d4047; --tb-text: #e8e9eb; --tb-muted: #9da0a8; --tb-scroll: #3d4047; }
-:root[data-theme=light][data-hub-bg=graphite] { --tb-bg: #f3f3f4; --tb-surface: #ffffff; --tb-surface-2: #efeff1; --tb-surface-3: #e4e4e7;
-  --tb-border: #dcdce1; --tb-border-strong: #c2c3c9; --tb-text: #17181b; --tb-muted: #5c5e66; --tb-scroll: #c2c3c9; }
-:root[data-theme=dark][data-hub-bg=warm] { --tb-bg: #141210; --tb-surface: #1c1916; --tb-surface-2: #24201c; --tb-surface-3: #2d2823;
-  --tb-border: #37312a; --tb-border-strong: #4a4239; --tb-text: #ede7e0; --tb-muted: #a89e92; --tb-scroll: #4a4239; }
-:root[data-theme=light][data-hub-bg=warm] { --tb-bg: #f6f3ef; --tb-surface: #fffdfa; --tb-surface-2: #f1ece5; --tb-surface-3: #e7e0d6;
-  --tb-border: #ddd4c8; --tb-border-strong: #c7bcae; --tb-text: #1f1b17; --tb-muted: #665d53; --tb-scroll: #c7bcae; }
-:root[data-theme=dark][data-hub-bg=nord] { --tb-bg: #1f232b; --tb-surface: #262b34; --tb-surface-2: #2d333d; --tb-surface-3: #353c48;
-  --tb-border: #3b4252; --tb-border-strong: #4c566a; --tb-text: #e5e9f0; --tb-muted: #a8b0be; --tb-scroll: #4c566a; }
-:root[data-theme=light][data-hub-bg=nord] { --tb-bg: #eceff4; --tb-surface: #ffffff; --tb-surface-2: #e5e9f0; --tb-surface-3: #d8dee9;
-  --tb-border: #ccd3df; --tb-border-strong: #aeb7c6; --tb-text: #1d2330; --tb-muted: #4c566a; --tb-scroll: #aeb7c6; }
-:root[data-theme=dark][data-hub-bg=contrast] { --tb-bg: #000000; --tb-surface: #0a0a0a; --tb-surface-2: #161616; --tb-surface-3: #222222;
-  --tb-border: #737373; --tb-border-strong: #a3a3a3; --tb-text: #ffffff; --tb-muted: #dcdcdc; --tb-scroll: #a3a3a3; }
-:root[data-theme=light][data-hub-bg=contrast] { --tb-bg: #ffffff; --tb-surface: #ffffff; --tb-surface-2: #f0f0f0; --tb-surface-3: #e2e2e2;
-  --tb-border: #4d4d4d; --tb-border-strong: #1a1a1a; --tb-text: #000000; --tb-muted: #2e2e2e; --tb-scroll: #4d4d4d; }
-:root[data-hub-bg=contrast] .tb-card, :root[data-hub-bg=contrast] .tb-side { box-shadow: none; }
-:root[data-theme=dark][data-hub-bg=black] { --tb-bg: #000000; --tb-surface: #0b0b0c; --tb-surface-2: #131315; --tb-surface-3: #1b1b1e;
-  --tb-border: #232327; --tb-border-strong: #33333a; --tb-text: #e9e9eb; --tb-muted: #9d9da5; --tb-scroll: #33333a; }
-:root[data-theme=light][data-hub-bg=black] { --tb-bg: #f3f3f4; --tb-surface: #ffffff; --tb-surface-2: #efeff1; --tb-surface-3: #e4e4e7;
-  --tb-border: #dcdce1; --tb-border-strong: #c2c3c9; --tb-text: #17181b; --tb-muted: #5c5e66; --tb-scroll: #c2c3c9; }
-
-/* ----- 液態玻璃：多彩模糊光斑背景＋半透明表面＋上緣高光＋柔和陰影＋大圓角 -----
-   明顯：側欄、工具框、對話框做背景模糊（blur 24px、飽和 170%）；卡片只半透明（光斑本身已經很柔和，看起來一樣，但便宜很多）。
-   內斂：不模糊、表面較不透明。瀏覽器不支援 backdrop-filter 時退回較不透明的表面。只影響 Hub，不影響嵌入的工具頁面。 */
-:root[data-hub-bg=glass] { --tb-radius-xl: 20px; --hub-glass-fx: saturate(170%) blur(24px); }
-:root[data-theme=dark][data-hub-bg=glass] { --tb-bg: #0a0c13; --tb-text: #f2f4f8; --tb-muted: #b9c1cf;
-  --tb-surface: rgba(255, 255, 255, 0.07); --tb-surface-2: rgba(255, 255, 255, 0.11); --tb-surface-3: rgba(255, 255, 255, 0.16);
-  --tb-border: rgba(255, 255, 255, 0.12); --tb-border-strong: rgba(255, 255, 255, 0.22); --tb-scroll: rgba(255, 255, 255, 0.22);
-  --hub-glass-hi: rgba(255, 255, 255, 0.16); --hub-glass-solid: rgba(22, 26, 38, 0.92); }
-:root[data-theme=light][data-hub-bg=glass] { --tb-bg: #eaeef5; --tb-text: #0f1626; --tb-muted: #3b4558;
-  --tb-surface: rgba(255, 255, 255, 0.58); --tb-surface-2: rgba(255, 255, 255, 0.72); --tb-surface-3: rgba(255, 255, 255, 0.85);
-  --tb-border: rgba(15, 22, 38, 0.10); --tb-border-strong: rgba(15, 22, 38, 0.20); --tb-scroll: rgba(15, 22, 38, 0.22);
-  --hub-glass-hi: rgba(255, 255, 255, 0.85); --hub-glass-solid: rgba(250, 251, 253, 0.94); }
-:root[data-hub-bg=glass] body::before { opacity: var(--hub-tex-k); background:
-  radial-gradient(36rem 28rem at 8% 6%, color-mix(in srgb, var(--tb-accent) 34%, transparent), transparent 64%),
-  radial-gradient(34rem 26rem at 92% 14%, color-mix(in srgb, #ec4899 26%, transparent), transparent 64%),
-  radial-gradient(40rem 30rem at 72% 96%, color-mix(in srgb, #14b8a6 26%, transparent), transparent 66%),
-  radial-gradient(30rem 24rem at 18% 92%, color-mix(in srgb, #f59e0b 18%, transparent), transparent 64%); }
-:root[data-hub-bg=glass] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu) {
-  background: var(--tb-surface); border-color: var(--tb-border);
-  box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 8px 28px rgba(0, 0, 0, 0.18); }
-:root[data-hub-bg=glass]:not([data-hub-strength=soft]) :is(.tb-side, .hub-framebox, .tb-dialog, .hub-menu) {
-  backdrop-filter: var(--hub-glass-fx); -webkit-backdrop-filter: var(--hub-glass-fx); }
-:root[data-hub-bg=glass] :is(.tb-dialog, dialog.tb-dialog) { background: var(--hub-glass-solid); box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.35); }
-:root[data-hub-bg=glass] :is(.tb-btn, .tb-input, .tb-seg) { border-radius: 12px; }
-:root[data-hub-bg=glass] .tb-nav__item { border-radius: 12px; }
-:root[data-hub-bg=glass][data-hub-strength=soft] { --tb-surface: var(--hub-glass-solid); }
-:root[data-theme=dark][data-hub-bg=glass][data-hub-strength=soft] { --tb-surface: rgba(24, 28, 40, 0.94); --tb-surface-2: rgba(34, 39, 54, 0.95); }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root[data-hub-bg=glass] { --tb-surface: var(--hub-glass-solid); }
-}
-
-/* 紋理層：頁面底色之上、內容之下；--hub-tex-k 依強度縮放 */
-body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: transparent; }
-:root[data-hub-bg=glow] body::before { opacity: var(--hub-tex-k); background:
-  radial-gradient(46rem 30rem at 10% -8%, color-mix(in srgb, var(--tb-accent) 26%, transparent), transparent 62%),
-  radial-gradient(52rem 36rem at 104% 106%, color-mix(in srgb, var(--tb-accent) 17%, transparent), transparent 66%); }
-:root[data-hub-bg=grid] body::before { opacity: calc(.5 * var(--hub-tex-k)); background:
-  linear-gradient(var(--tb-border) 1px, transparent 1px) 0 0 / 100% 28px,
-  linear-gradient(90deg, var(--tb-border) 1px, transparent 1px) 0 0 / 28px 100%; }
-:root[data-hub-bg=dots] body::before { opacity: calc(.65 * var(--hub-tex-k)); background:
-  radial-gradient(var(--tb-border) 1px, transparent 1.4px) 0 0 / 22px 22px; }
-:root[data-hub-bg=dusk] body::before { opacity: var(--hub-tex-k); background:
-  radial-gradient(60rem 26rem at 50% 114%, color-mix(in srgb, #fb923c 24%, transparent), transparent 62%),
-  radial-gradient(42rem 24rem at 16% -8%, color-mix(in srgb, #a855f7 15%, transparent), transparent 62%); }
-:root[data-hub-bg=forest] body::before { opacity: var(--hub-tex-k); background:
-  radial-gradient(44rem 30rem at -6% -8%, color-mix(in srgb, #34d399 15%, transparent), transparent 62%),
-  radial-gradient(52rem 34rem at 108% 106%, color-mix(in srgb, #16a34a 13%, transparent), transparent 66%); }
-:root[data-hub-bg=cyber] body::before { opacity: var(--hub-tex-k); background:
-  repeating-linear-gradient(0deg, color-mix(in srgb, #22d3ee 3.5%, transparent) 0 1px, transparent 1px 4px),
-  radial-gradient(38rem 24rem at 0% 0%, color-mix(in srgb, #22d3ee 16%, transparent), transparent 60%),
-  radial-gradient(38rem 24rem at 100% 100%, color-mix(in srgb, #e879f9 14%, transparent), transparent 60%); }
-
-/* 色板覆蓋：深色／淺色各一套。光暈與 --tb-accent 混色，跟強調色連動；黑白只去彩度。 */
-:root[data-theme=dark][data-hub-bg=glow] { --tb-bg: color-mix(in srgb, #0a0e19 90%, var(--tb-accent));
-  --tb-surface: color-mix(in srgb, #111726 87%, var(--tb-accent)); --tb-surface-2: color-mix(in srgb, #172033 87%, var(--tb-accent));
-  --tb-surface-3: color-mix(in srgb, #1f2a40 87%, var(--tb-accent)); --tb-border: color-mix(in srgb, #243049 78%, var(--tb-accent)); }
-:root[data-theme=light][data-hub-bg=glow] { --tb-bg: color-mix(in srgb, #f3f5f9 93%, var(--tb-accent));
-  --tb-surface: color-mix(in srgb, #ffffff 97%, var(--tb-accent)); --tb-surface-2: color-mix(in srgb, #f0f2f6 94%, var(--tb-accent));
-  --tb-surface-3: color-mix(in srgb, #e5e9f0 90%, var(--tb-accent)); --tb-border: color-mix(in srgb, #dde2ea 86%, var(--tb-accent)); }
-:root[data-theme=dark][data-hub-bg=grid] { --tb-bg: #0c1322; --tb-surface: #131c30; --tb-surface-2: #1a2740; --tb-surface-3: #233452; --tb-border: #2c4062; }
-:root[data-theme=light][data-hub-bg=grid] { --tb-bg: #eaf0f8; --tb-surface: #ffffff; --tb-surface-2: #eef3f9; --tb-surface-3: #e0e9f4; --tb-border: #c9d7e8; }
-:root[data-theme=dark][data-hub-bg=dots] { --tb-bg: #14100b; --tb-surface: #1d1811; --tb-surface-2: #262017; --tb-surface-3: #302820; --tb-border: #3d3226; }
-:root[data-theme=light][data-hub-bg=dots] { --tb-bg: #f6f1e7; --tb-surface: #fffcf5; --tb-surface-2: #f0e9da; --tb-surface-3: #e6dcc8; --tb-border: #d8cbb2; }
-:root[data-theme=dark][data-hub-bg=dusk] { --tb-bg: #170e1a; --tb-surface: #211526; --tb-surface-2: #2b1a2d; --tb-surface-3: #372034; --tb-border: #4a2a41; }
-:root[data-theme=light][data-hub-bg=dusk] { --tb-bg: #f7efe9; --tb-surface: #fffbf7; --tb-surface-2: #f3e5dc; --tb-surface-3: #ecd6c9; --tb-border: #dcbfae; }
-:root[data-theme=dark][data-hub-bg=forest] { --tb-bg: #0b130e; --tb-surface: #121d15; --tb-surface-2: #19271d; --tb-surface-3: #213326; --tb-border: #2c4233; }
-:root[data-theme=light][data-hub-bg=forest] { --tb-bg: #edf3ea; --tb-surface: #fbfef9; --tb-surface-2: #e8efe3; --tb-surface-3: #dae6d3; --tb-border: #c3d4ba; }
-:root[data-theme=dark][data-hub-bg=mono] { --tb-bg: #0c0c0d; --tb-surface: #151516; --tb-surface-2: #1d1d1f; --tb-surface-3: #262629; --tb-border: #333337; }
-:root[data-theme=light][data-hub-bg=mono] { --tb-bg: #f2f2f3; --tb-surface: #ffffff; --tb-surface-2: #ebebed; --tb-surface-3: #e0e0e3; --tb-border: #d0d0d5; }
-:root[data-theme=dark][data-hub-bg=cyber] { --tb-bg: #060a15; --tb-surface: #0c1322; --tb-surface-2: #121c33; --tb-surface-3: #192745; --tb-border: #24385e; }
-:root[data-theme=light][data-hub-bg=cyber] { --tb-bg: #edf1f9; --tb-surface: #ffffff; --tb-surface-2: #eaeff8; --tb-surface-3: #dde5f3; --tb-border: #c4d0e6; }
-
 /* ============ 版面整理（三頁共用頁首、側欄、管理工具列、說明卡） ============ */
 
 /* 三頁（總覽、管理工具、設定）共用內容邊距與頁首：標題靠左、按鈕靠右 */
@@ -368,62 +251,6 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 .tb-dialog[data-tone="danger"] .tb-dialog__icon { background: var(--tb-danger-soft); color: var(--tb-danger); }
 .tb-dialog[data-tone="info"] .tb-dialog__icon { background: var(--tb-accent-soft); color: var(--tb-accent); }
 
-/* ----- 所有對話框（確認、匯入、連結、安裝、更換圖示）跟著主題 ----- */
-:is(.tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) { background: var(--tb-surface); color: var(--tb-text); border-color: var(--tb-border-strong); }
-:root[data-hub-bg=glass] :is(.tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
-  background: color-mix(in srgb, var(--hub-glass-solid) 62%, transparent);
-  backdrop-filter: saturate(180%) blur(30px); -webkit-backdrop-filter: saturate(180%) blur(30px);
-  border: 1px solid var(--tb-border-strong); border-radius: 22px;
-  box-shadow: inset 0 1px 0 var(--hub-glass-hi), 0 24px 70px rgba(0, 0, 0, 0.38); }
-:root[data-hub-bg=glass] .tb-dialog-backdrop { background: rgba(5, 8, 16, 0.32); backdrop-filter: blur(4px); }
-:root[data-hub-bg=glass] dialog.tb-dialog::backdrop { background: rgba(5, 8, 16, 0.32); backdrop-filter: blur(4px); }
-:root[data-hub-bg=glass] .hub-md { background: color-mix(in srgb, var(--tb-text) 6%, transparent); }
-
-/* ----- 磨砂：不透明霧面＋細顆粒雜訊（不用 backdrop-filter，效能最好） ----- */
-:root[data-hub-bg=frost] { --hub-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .14 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); --tb-radius-xl: 18px; }
-:root[data-theme=dark][data-hub-bg=frost] { --tb-bg: #1b1d21; --tb-surface: #25282d; --tb-surface-2: #2c2f35; --tb-surface-3: #353840;
-  --tb-border: #383c43; --tb-border-strong: #4a4e57; --tb-text: #eceef1; --tb-muted: #a9aeb8; --tb-scroll: #4a4e57; }
-:root[data-theme=light][data-hub-bg=frost] { --tb-bg: #e4e6ea; --tb-surface: #f4f5f7; --tb-surface-2: #eceef1; --tb-surface-3: #e1e4e8;
-  --tb-border: #d3d7dd; --tb-border-strong: #bcc1c9; --tb-text: #16191d; --tb-muted: #555b65; --tb-scroll: #bcc1c9; }
-:root[data-hub-bg=frost] body::before { background: var(--hub-noise); opacity: .9; }
-:root[data-hub-bg=frost] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
-  background-color: var(--tb-surface); background-image: var(--hub-noise); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
-
-/* ----- 金屬：冷銀拉絲漸層＋細高光（上亮下暗的倒角） ----- */
-:root[data-theme=dark][data-hub-bg=metal] { --tb-bg: #101215; --tb-surface: #23262b; --tb-surface-2: #2b2f35; --tb-surface-3: #343840;
-  --tb-border: #3a3f47; --tb-border-strong: #50565f; --tb-text: #eef0f3; --tb-muted: #aab0ba; --tb-scroll: #50565f;
-  --hub-metal-hi: rgba(255, 255, 255, 0.14); --hub-metal-lo: rgba(0, 0, 0, 0.55); --hub-metal-line: rgba(255, 255, 255, 0.022); --hub-metal-sheen: rgba(255, 255, 255, 0.07); }
-:root[data-theme=light][data-hub-bg=metal] { --tb-bg: #d5d9df; --tb-surface: #e8ebef; --tb-surface-2: #dfe3e8; --tb-surface-3: #d3d8df;
-  --tb-border: #b9bfc8; --tb-border-strong: #9aa2ad; --tb-text: #111418; --tb-muted: #454b55; --tb-scroll: #9aa2ad;
-  --hub-metal-hi: rgba(255, 255, 255, 0.9); --hub-metal-lo: rgba(70, 80, 95, 0.25); --hub-metal-line: rgba(0, 0, 0, 0.022); --hub-metal-sheen: rgba(255, 255, 255, 0.55); }
-:root[data-hub-bg=metal] body::before { background:
-  repeating-linear-gradient(90deg, var(--hub-metal-line) 0 1px, transparent 1px 3px),
-  linear-gradient(160deg, var(--hub-metal-sheen), transparent 45%, var(--hub-metal-sheen) 70%, transparent); }
-:root[data-hub-bg=metal] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
-  background-color: var(--tb-surface);
-  background-image: linear-gradient(180deg, var(--hub-metal-sheen), transparent 38%, transparent 70%, color-mix(in srgb, var(--hub-metal-lo) 30%, transparent)),
-    repeating-linear-gradient(90deg, var(--hub-metal-line) 0 1px, transparent 1px 3px);
-  box-shadow: inset 0 1px 0 var(--hub-metal-hi), inset 0 -1px 0 var(--hub-metal-lo), 0 2px 8px rgba(0, 0, 0, 0.22); }
-:root[data-hub-bg=metal] .tb-btn:not(.tb-btn--ghost) { background-image: linear-gradient(180deg, var(--hub-metal-sheen), transparent 60%); box-shadow: inset 0 1px 0 var(--hub-metal-hi); }
-
-/* ----- 珠光：柔和虹彩漸層表面、淡淡光澤，跟強調色微調 ----- */
-:root[data-theme=dark][data-hub-bg=pearl] { --tb-bg: #15121a; --tb-surface: #211d28; --tb-surface-2: #29242f; --tb-surface-3: #322c3a;
-  --tb-border: #3c3546; --tb-border-strong: #51485e; --tb-text: #f2eef7; --tb-muted: #b9b0c7; --tb-scroll: #51485e; --hub-pearl-k: 9%; }
-:root[data-theme=light][data-hub-bg=pearl] { --tb-bg: #f3f0f6; --tb-surface: #fdfcfe; --tb-surface-2: #f5f1f8; --tb-surface-3: #ebe5f0;
-  --tb-border: #e0d7e8; --tb-border-strong: #c9bcd6; --tb-text: #1c1722; --tb-muted: #5d5468; --tb-scroll: #c9bcd6; --hub-pearl-k: 14%; }
-:root[data-hub-bg=pearl] body::before { background:
-  radial-gradient(40rem 30rem at 0% 0%, color-mix(in srgb, #f472b6 var(--hub-pearl-k), transparent), transparent 65%),
-  radial-gradient(42rem 30rem at 100% 10%, color-mix(in srgb, var(--tb-accent) var(--hub-pearl-k), transparent), transparent 65%),
-  radial-gradient(44rem 32rem at 60% 100%, color-mix(in srgb, #2dd4bf var(--hub-pearl-k), transparent), transparent 66%); }
-:root[data-hub-bg=pearl] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
-  background-color: var(--tb-surface);
-  background-image: linear-gradient(125deg,
-    color-mix(in srgb, #f9a8d4 calc(var(--hub-pearl-k) * .8), transparent),
-    color-mix(in srgb, var(--tb-accent) calc(var(--hub-pearl-k) * .6), transparent) 35%,
-    color-mix(in srgb, #99f6e4 calc(var(--hub-pearl-k) * .7), transparent) 70%,
-    color-mix(in srgb, #fde68a calc(var(--hub-pearl-k) * .5), transparent));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 20px rgba(60, 30, 90, 0.10); }
-
 /* ----- 側欄清單：不顯示捲軸（仍可捲），上下淡出提示還有內容；圖示永遠置中 ----- */
 .hub-side #toolNav { scrollbar-width: none; }
 .hub-side #toolNav::-webkit-scrollbar { display: none; }
@@ -468,54 +295,12 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
   .hub-foot-icon { width: 36px; height: 28px; }
 }
 
-/* ----- 液態玻璃（真正的）：清透、輕模糊、邊緣折射、強鏡面高光、膠囊按鈕 -----
-   大面板（側欄、工具框、對話框、選單）：backdrop-filter 用 SVG 位移濾鏡做折射（Chromium），再加 7px 模糊與高飽和；
-   不支援時只剩模糊與高光。卡片不做 backdrop-filter（效能），用同樣的高光層次。 */
+/* Chromium liquid glass uses Hub's local SVG filter. */
 .hub-svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
-:root[data-hub-bg=liquid] { --tb-radius-xl: 22px; --tb-radius-lg: 16px;
-  --hub-lq-fx: url(#hub-liquid) blur(7px) saturate(190%) brightness(1.04); }
-:root[data-theme=dark][data-hub-bg=liquid] { --tb-bg: #060912; --tb-text: #f6f8fc; --tb-muted: #c6cddb;
-  --tb-surface: rgba(255, 255, 255, 0.05); --tb-surface-2: rgba(255, 255, 255, 0.10); --tb-surface-3: rgba(255, 255, 255, 0.15);
-  --tb-border: rgba(255, 255, 255, 0.16); --tb-border-strong: rgba(255, 255, 255, 0.30); --tb-scroll: rgba(255, 255, 255, 0.28);
-  --hub-lq-tint: rgba(8, 12, 24, 0.34); --hub-lq-hi: rgba(255, 255, 255, 0.60); --hub-lq-lo: rgba(255, 255, 255, 0.14);
-  --hub-lq-solid: rgba(16, 20, 34, 0.72); }
-:root[data-theme=light][data-hub-bg=liquid] { --tb-bg: #e9eef7; --tb-text: #0a1120; --tb-muted: #2f3b52;
-  --tb-surface: rgba(255, 255, 255, 0.30); --tb-surface-2: rgba(255, 255, 255, 0.46); --tb-surface-3: rgba(255, 255, 255, 0.60);
-  --tb-border: rgba(255, 255, 255, 0.70); --tb-border-strong: rgba(10, 17, 32, 0.18); --tb-scroll: rgba(10, 17, 32, 0.22);
-  --hub-lq-tint: rgba(255, 255, 255, 0.36); --hub-lq-hi: rgba(255, 255, 255, 0.95); --hub-lq-lo: rgba(255, 255, 255, 0.45);
-  --hub-lq-solid: rgba(248, 250, 254, 0.70); }
-/* 背景：鮮明的柔和色塊，讓透明與折射看得出來 */
-:root[data-hub-bg=liquid] body::before { background:
-  radial-gradient(30rem 24rem at 12% 12%, color-mix(in srgb, var(--tb-accent) 62%, transparent), transparent 62%),
-  radial-gradient(28rem 22rem at 88% 18%, color-mix(in srgb, #ec4899 52%, transparent), transparent 62%),
-  radial-gradient(34rem 26rem at 70% 92%, color-mix(in srgb, #06b6d4 50%, transparent), transparent 64%),
-  radial-gradient(26rem 20rem at 20% 88%, color-mix(in srgb, #f59e0b 40%, transparent), transparent 62%); }
-/* 表面：極淡底（保文字對比）＋左上鏡面高光；上緣強反光、下緣柔和反射、左右極淡色散 */
-:root[data-hub-bg=liquid] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
-  background-color: var(--hub-lq-tint);
-  background-image: radial-gradient(140% 70% at 0% 0%, color-mix(in srgb, var(--hub-lq-hi) 30%, transparent), transparent 55%),
-    linear-gradient(180deg, color-mix(in srgb, var(--hub-lq-hi) 14%, transparent), transparent 35%, transparent 75%, color-mix(in srgb, var(--hub-lq-lo) 40%, transparent));
-  border: 1px solid var(--tb-border);
-  box-shadow: inset 0 1px 0 var(--hub-lq-hi), inset 0 -1px 0 var(--hub-lq-lo),
-    inset 1px 0 0 rgba(255, 120, 210, 0.16), inset -1px 0 0 rgba(90, 220, 255, 0.16),
-    0 10px 30px rgba(0, 0, 0, 0.22); }
-:root[data-hub-bg=liquid] :is(.tb-side, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
-  backdrop-filter: var(--hub-lq-fx); -webkit-backdrop-filter: blur(7px) saturate(190%); }
-:root[data-hub-bg=liquid] :is(.tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) { background-color: var(--hub-lq-solid); border-radius: 26px; }
-:root[data-hub-bg=liquid] .tb-dialog-backdrop, :root[data-hub-bg=liquid] dialog.tb-dialog::backdrop { background: rgba(5, 8, 16, 0.22); backdrop-filter: blur(2px); }
-/* 膠囊玻璃按鈕與選取項；滑過時高光從左流到右 */
-:root[data-hub-bg=liquid] :is(.tb-btn, .tb-seg, .tb-seg__btn, .tb-input, .tb-nav__item) { border-radius: 999px; }
-:root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]) {
-  background-image: linear-gradient(110deg, transparent 35%, color-mix(in srgb, var(--hub-lq-hi) 45%, transparent) 50%, transparent 65%),
-    linear-gradient(180deg, color-mix(in srgb, var(--hub-lq-hi) 22%, transparent), transparent 60%);
-  background-size: 260% 100%, 100% 100%; background-position: 120% 0, 0 0;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), 0 2px 8px rgba(0, 0, 0, 0.12);
-  transition: background-position .6s ease, border-color var(--tb-transition), color var(--tb-transition); }
-:root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]):hover { background-position: -20% 0, 0 0; }
-:root[data-hub-bg=liquid] .tb-btn:not(.tb-btn--primary):not(.tb-btn--danger) { background-color: var(--tb-surface-2); }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root[data-hub-bg=liquid] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu) { background-color: var(--hub-lq-solid); }
-}
+:root[data-hub-bg=liquid] { --hub-lq-fx: url(#hub-liquid) blur(7px) saturate(190%) brightness(1.04); }
+
+.tb-dialog { background: var(--tb-surface); color: var(--tb-text); border-color: var(--tb-border-strong); }
+:root[data-hub-bg=glass] .hub-md { background: color-mix(in srgb, var(--tb-text) 6%, transparent); }
 
 /* ============ 側欄：展開與收合排列一致（641px 以上） ============
    一條固定的圖示欄：側欄左右留白 6px、項目左內距 18px → 圖示中心永遠在側欄左緣 32px；
@@ -586,21 +371,6 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 @media (min-width: 641px) {
   .hub-page-body { margin-inline: -8px; padding-inline: calc(var(--tb-space-1) + 8px); }
 }
-:root[data-hub-bg=liquid] { --hub-lq-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.55);
-  --hub-lq-disp-l: rgba(255, 120, 210, 0.14); --hub-lq-disp-r: rgba(90, 220, 255, 0.14); }
-:root[data-theme=light][data-hub-bg=liquid] { --hub-lq-shadow: 0 12px 24px -12px rgba(40, 60, 110, 0.22);
-  --hub-lq-disp-l: rgba(255, 255, 255, 0.55); --hub-lq-disp-r: rgba(255, 255, 255, 0.55); }
-:root[data-hub-bg=liquid] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu, .tb-dialog-backdrop .tb-dialog, dialog.tb-dialog) {
-  box-shadow: inset 0 1px 0 var(--hub-lq-hi), inset 0 -1px 0 var(--hub-lq-lo),
-    inset 1px 0 0 var(--hub-lq-disp-l), inset -1px 0 0 var(--hub-lq-disp-r), var(--hub-lq-shadow); }
-:root[data-hub-bg=glass] { --hub-glass-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.5); }
-:root[data-theme=light][data-hub-bg=glass] { --hub-glass-shadow: 0 12px 24px -12px rgba(40, 60, 110, 0.20); }
-:root[data-hub-bg=glass] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu) { box-shadow: inset 0 1px 0 var(--hub-glass-hi), var(--hub-glass-shadow); }
-/* 膠囊按鈕／選取項的陰影也收小（水平最多 4px），不會被側欄 6px 留白硬切；淺色用帶藍的淡陰影 */
-:root[data-hub-bg=liquid] { --hub-lq-btn-shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.30); }
-:root[data-theme=light][data-hub-bg=liquid] { --hub-lq-btn-shadow: 0 2px 6px -2px rgba(40, 60, 110, 0.22); }
-:root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]) {
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--hub-lq-btn-shadow); }
 /* ============ 設定 → 更新：清理舊版檔案 ============ */
 .hub-cleanup { margin-top: var(--tb-space-3); display: grid; gap: var(--tb-space-3); }
 .hub-cleanup__summary { margin: 0; font-weight: 600; }

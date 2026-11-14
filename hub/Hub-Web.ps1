@@ -702,6 +702,7 @@ function Get-StaticFile([string]$path) {
         '/index.html'  = @('index.html', 'text/html; charset=utf-8', $script:UiDir)
         '/app.js'      = @('app.js', 'application/javascript; charset=utf-8', $script:UiDir)
         '/hub.css'     = @('hub.css', 'text/css; charset=utf-8', $script:UiDir)
+        '/tool-theme.css' = @('tool-theme.css', 'text/css; charset=utf-8', $script:UiDir)
         '/hub-bg.js'   = @('hub-bg.js', 'application/javascript; charset=utf-8', $script:UiDir)
         '/hub-icons.js' = @('hub-icons.js', 'application/javascript; charset=utf-8', $script:UiDir)
         '/ui-kit.css'  = @('ui-kit.css', 'text/css; charset=utf-8', $script:KitDir)

@@ -1,8 +1,7 @@
 /* hub-bg.js — Hub 主題風格：繪製前先套用，避免閃爍。
  * 風格：?bg= 參數 > localStorage hub.bg > graphite（石墨，預設）。
  *   plain＝經典（ui-kit 原色，不設 data-hub-bg 屬性）；其他值見 hub.css 的 data-hub-bg。
- * 風格強度固定「明顯」（舊版的 hub.bgStrength 設定不再使用）。
- * 只影響 Hub 介面本身，不影響嵌入的工具頁面。 */
+ * 風格強度固定「明顯」，目前風格會同步給嵌入的工具頁面。 */
 (function () {
   'use strict';
   var BG = ['graphite', 'warm', 'nord', 'contrast', 'black', 'liquid', 'glass', 'frost', 'metal', 'pearl',

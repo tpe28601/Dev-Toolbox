@@ -250,20 +250,25 @@ function busyLabel(action) {
 // 工具頁面狀態（表單、進行中的工作面板等）完整保留；工具停止或 port 變更才銷毀。
 const frames = new Map();   // id -> { panel, frame, url, origin }
 
+function hubStyle() { return document.documentElement.dataset.hubBg || 'plain'; }
+
+function sendFrameTheme(rec) {
+  const { mode, accent } = TbTheme.get();
+  rec.frame.contentWindow?.postMessage({ type: 'tb-theme', mode, accent, bg: hubStyle() }, rec.origin);
+}
+
 function createFrame(t) {
   const panel = el('div', 'hub-frame-panel tb-hidden');
   const frame = el('iframe');
   frame.title = t.name || '工具畫面';
   frame.setAttribute('referrerpolicy', 'no-referrer');
   const origin = new URL(t.running.url).origin;
-  const rec = { panel, frame, url: t.running.url, src: '', origin, loaded: false, timer: 0 };
+  const rec = { panel, frame, url: t.running.url, origin, loaded: false, timer: 0 };
   frame.addEventListener('load', () => {
     rec.loaded = true;
     clearTimeout(rec.timer);
-    const th = TbTheme.get();
-    try { frame.contentWindow.postMessage({ type: 'tb-theme', mode: th.mode, accent: th.accent }, origin); } catch (_) { /* 尚未載入 */ }
+    sendFrameTheme(rec);
   });
-  rec.src = `${t.running.url}/?${TbTheme.query()}&embedded=1`;
   panel.appendChild(frame);
   // 載入失敗時的說明卡（嵌入被工具拒絕、或太久沒有回應）
   const fail = el('div', 'hub-frame-fail tb-hidden');
@@ -287,7 +292,7 @@ function showFrameFail(t, rec, title, reason) {
   const pop = el('button', 'tb-btn tb-btn--primary');
   pop.type = 'button';
   pop.innerHTML = icon('external-link', { anim: 'nudge' }) + '在新視窗開啟';
-  pop.addEventListener('click', () => window.open(`${rec.url}/?${TbTheme.query()}`, '_blank', 'noopener'));
+  pop.addEventListener('click', () => window.open(rec.url, '_blank', 'noopener'));
   const again = el('button', 'tb-btn');
   again.type = 'button';
   again.innerHTML = icon('refresh-cw', { anim: 'spin' }) + '重新載入';
@@ -313,7 +318,11 @@ async function loadFrame(t, rec) {
   rec.timer = setTimeout(() => {
     if (!rec.loaded) showFrameFail(t, rec, '工具畫面沒有回應', '10 秒內沒有載入完成。可以在新視窗開啟，或重新載入一次。');
   }, 10000);
-  rec.frame.src = rec.src;
+  const query = new URLSearchParams(TbTheme.query());
+  query.set('embedded', '1');
+  query.set('bg', hubStyle());
+  query.set('hubOrigin', location.origin);
+  rec.frame.src = `${rec.url}/?${query}`;
 }
 
 function destroyFrame(id) {
@@ -333,10 +342,7 @@ function syncFrames() {
 
 // 主題變更：广播給所有 frame（含隱藏中的，切回來時也是正確主題）
 function postThemeToFrames() {
-  const th = TbTheme.get();
-  for (const rec of frames.values()) {
-    try { rec.frame.contentWindow.postMessage({ type: 'tb-theme', mode: th.mode, accent: th.accent }, rec.origin); } catch (_) { /* 尚未載入 */ }
-  }
+  for (const rec of frames.values()) sendFrameTheme(rec);
 }
 
 function showFrame(t) {
@@ -556,7 +562,7 @@ function renderDash() {
         ob.innerHTML = icon('external-link', { anim: 'nudge' });
         ob.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          window.open(`${t.running.url}/?${TbTheme.query()}`, '_blank', 'noopener');
+          window.open(t.running.url, '_blank', 'noopener');
         });
         acts.appendChild(ob);
       }
@@ -946,7 +952,7 @@ els.navTheme.addEventListener('click', (ev) => {
   TbTheme.set(THEME_NEXT[TbTheme.get().mode] || 'light');
 });
 
-// ---------- 主題風格（僅 Hub 整體色調，localStorage hub.bg；hub-bg.js 繪製前先套） ----------
+// ---------- 主題風格（localStorage hub.bg；hub-bg.js 繪製前先套） ----------
 const BG_NAMES = { graphite: '石墨', warm: '暖灰', nord: '冷灰藍', contrast: '高對比', black: '純黑', plain: '經典',
   liquid: '液態玻璃', glass: '霧面玻璃', frost: '磨砂', metal: '金屬', pearl: '珠光', glow: '光暈', grid: '網格', dots: '點陣', dusk: '暮色', forest: '森林', mono: '黑白', cyber: '霓虹' };
 function setBg(v) {
@@ -955,9 +961,10 @@ function setBg(v) {
   if (v === 'plain') delete document.documentElement.dataset.hubBg;
   else document.documentElement.dataset.hubBg = v;
   syncBgControls();
+  postThemeToFrames();
 }
 function syncBgControls() {
-  const cur = document.documentElement.dataset.hubBg || 'plain';
+  const cur = hubStyle();
   els.bgSeg.querySelectorAll('[data-bg]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.bg === cur)));
 }
 els.bgSeg.querySelectorAll('[data-bg]').forEach((b) => b.addEventListener('click', () => setBg(b.dataset.bg)));
@@ -1712,7 +1719,7 @@ els.btnReload.addEventListener('click', () => {
 });
 els.btnPopout.addEventListener('click', () => {
   const t = toolById(state.selected);
-  if (t && t.running) window.open(`${t.running.url}/?${TbTheme.query()}`, '_blank', 'noopener');
+  if (t && t.running) window.open(t.running.url, '_blank', 'noopener');
 });
 
 // ---------- 啟動 ----------
