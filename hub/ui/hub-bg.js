@@ -18,4 +18,19 @@
   } catch (e) {
     root.dataset.hubBg = 'graphite';   // 無痕模式：石墨、側欄展開
   }
+  // 圖示列（data-hub-rail）：寬螢幕手動收合，或 641–960px 自動變窄，兩者共用 hub.css 同一套收合樣式
+  try {
+    var wide = matchMedia('(min-width: 961px)');
+    var mid = matchMedia('(min-width: 641px) and (max-width: 960px)');
+    var syncRail = function () {
+      var rail = (wide.matches && root.dataset.hubSide === 'collapsed') || mid.matches;
+      if (rail) root.dataset.hubRail = ''; else delete root.dataset.hubRail;
+    };
+    syncRail();
+    [wide, mid].forEach(function (m) {
+      if (m.addEventListener) m.addEventListener('change', syncRail); else m.addListener(syncRail);
+    });
+    window.addEventListener('resize', syncRail);   // 有些環境（裝置模擬）不送 change 事件
+    new MutationObserver(syncRail).observe(root, { attributes: true, attributeFilter: ['data-hub-side'] });
+  } catch (e) { /* 舊瀏覽器：沿用 ui-kit 的窄版樣式 */ }
 })();

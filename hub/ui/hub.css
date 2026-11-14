@@ -248,17 +248,7 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 /* 外部啟動（不是 Hub 開的）工具：空心綠點 */
 .tb-dot.hub-dot--external { background: transparent; box-shadow: inset 0 0 0 2px var(--tb-ok); }
 
-/* 寬螢幕可收合成只剩圖示（記住狀態；960px 以下本來就是圖示列，不受影響） */
-@media (min-width: 961px) {
-  :root[data-hub-side=collapsed] .tb-shell { grid-template-columns: var(--tb-rail-w) minmax(0, 1fr); }
-  :root[data-hub-side=collapsed] .tb-side { padding: var(--tb-space-2) 6px; }
-  :root[data-hub-side=collapsed] .tb-brand { flex-direction: column; gap: var(--tb-space-2); padding: var(--tb-space-1) 0 var(--tb-space-3); }
-  :root[data-hub-side=collapsed] .hub-side-toggle { margin-left: 0; }
-  :root[data-hub-side=collapsed] :is(.tb-brand__text, .tb-nav__label, .tb-side__foot, .hub-side__group) { display: none; }
-  :root[data-hub-side=collapsed] .tb-nav__item { justify-content: center; padding: 0; }
-  :root[data-hub-side=collapsed] .hub-nav__dot { position: absolute; top: 6px; right: 6px; margin: 0; width: 7px; height: 7px; }
-  :root[data-hub-side=collapsed] .hub-nav__tool .tb-nav__label { display: none; }
-}
+/* 寬螢幕可收合成只剩圖示（記住狀態）；樣式見下方「側欄：展開與收合排列一致」 */
 @media (max-width: 960px) { .hub-side-toggle { display: none; } }
 
 /* 窄螢幕（640px 以下）：側欄變成一行的頂部列，整列一起橫向捲動，兩側淡出提示還有內容 */
@@ -527,40 +517,42 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
   :root[data-hub-bg=liquid] :is(.tb-side, .tb-card, .hub-framebox, .hub-menu) { background-color: var(--hub-lq-solid); }
 }
 
-/* ============ 側欄：展開與收合排列一致（寬螢幕） ============
+/* ============ 側欄：展開與收合排列一致（641px 以上） ============
    一條固定的圖示欄：側欄左右留白 6px、項目左內距 18px → 圖示中心永遠在側欄左緣 32px；
    logo、區段標題、底部項目、wifi 位址都對齊這條欄。收合只把寬度縮成 64px、文字淡出，
-   圖示與狀態點的 x、y 都不動；切換都點 logo（滑過時翻轉成收合／展開圖示）。 */
-@media (min-width: 961px) {
+   圖示與狀態點的 x、y 都不動；切換都點 logo（滑過時翻轉成收合／展開圖示）。
+   data-hub-rail（hub-bg.js）＝寬螢幕手動收合，或 641–960px 自動變窄；兩者共用下面同一套收合規則。
+   自動變窄時 logo 不能展開（空間不夠放完整側欄），要看名稱請放寬視窗或滑過圖示看提示。 */
+@media (min-width: 641px) {
   .tb-shell { transition: grid-template-columns .24s cubic-bezier(.2, .8, .2, 1); }
   .hub-side { padding: var(--tb-space-3) 6px; overflow: hidden; }
-  .hub-side .tb-brand { height: 56px; box-sizing: border-box; padding: 4px 0 12px 10px; flex-direction: row; gap: 10px; flex: none; }
+  .hub-side .tb-brand { height: 56px; box-sizing: border-box; padding: 4px 0 12px 10px; flex-direction: row; justify-content: flex-start; gap: 10px; flex: none; }
   /* 名稱一律單行（過長以「…」截斷，完整名稱在滑鼠提示），展開／收合的列高才會相同 */
   .hub-side .tb-nav__label { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset; line-clamp: unset; }
   .hub-side .hub-nav__tool { padding-top: 0; padding-bottom: 0; }
   .hub-side .hub-side-toggle { display: none; }
   .hub-side .tb-nav__item { padding-left: 18px; padding-right: 10px; justify-content: flex-start; }
   .hub-side .hub-side__group { position: relative; padding-left: 18px; white-space: nowrap; overflow: hidden; }
-  .hub-side .hub-nav__dot { position: absolute; left: 30px; top: 7px; margin: 0; width: 7px; height: 7px; }
+  .hub-side .hub-nav__dot { position: absolute; left: 30px; right: auto; top: 7px; margin: 0; width: 7px; height: 7px; }
   .hub-side :is(.tb-brand__text, .tb-nav__label, .hub-side-foot > span) {
     transition: opacity .2s ease, transform .24s cubic-bezier(.2, .8, .2, 1); }
   .hub-side .tb-side__foot.hub-side-foot { display: flex; padding: 10px 0 4px 12px; justify-content: flex-start; }
   .hub-side .hub-foot-icon { width: 28px; height: 26px; margin: 0; }
 
   /* 收合：文字淡出並往左輕移、區段標題變成細線，位置不變 */
-  :root[data-hub-side=collapsed] .tb-shell { grid-template-columns: var(--tb-rail-w) minmax(0, 1fr); }
-  :root[data-hub-side=collapsed] .hub-side { padding: var(--tb-space-3) 6px; }
-  :root[data-hub-side=collapsed] .hub-side .tb-brand { flex-direction: row; gap: 10px; padding: 4px 0 12px 10px; height: 56px; }
-  :root[data-hub-side=collapsed] .hub-side :is(.tb-brand__text, .tb-nav__label, .hub-side-foot > span) {
+  :root[data-hub-rail] .tb-shell { grid-template-columns: var(--tb-rail-w) minmax(0, 1fr); }
+  :root[data-hub-rail] .hub-side { padding: var(--tb-space-3) 6px; }
+  :root[data-hub-rail] .hub-side .tb-brand { flex-direction: row; gap: 10px; padding: 4px 0 12px 10px; height: 56px; }
+  :root[data-hub-rail] .hub-side :is(.tb-brand__text, .tb-nav__label, .hub-side-foot > span) {
     display: block; opacity: 0; transform: translateX(-6px); pointer-events: none; white-space: nowrap; }
-  :root[data-hub-side=collapsed] .hub-side .tb-nav__item { justify-content: flex-start; padding-left: 18px; }
-  :root[data-hub-side=collapsed] .hub-side .hub-nav__dot { left: 30px; right: auto; top: 7px; }
-  :root[data-hub-side=collapsed] .hub-side .hub-side__group { display: block; color: transparent; }
-  :root[data-hub-side=collapsed] .hub-side .hub-side__group::after { content: ''; position: absolute; left: 14px; right: 14px; top: 55%;
+  :root[data-hub-rail] .hub-side .tb-nav__item { justify-content: flex-start; padding-left: 18px; }
+  :root[data-hub-rail] .hub-side .hub-nav__dot { left: 30px; right: auto; top: 7px; }
+  :root[data-hub-rail] .hub-side .hub-side__group { display: block; color: transparent; }
+  :root[data-hub-rail] .hub-side .hub-side__group::after { content: ''; position: absolute; left: 14px; right: 14px; top: 55%;
     border-top: 1px solid var(--tb-border); }
-  :root[data-hub-side=collapsed] .hub-side .tb-side__foot.hub-side-foot { justify-content: flex-start; padding: 10px 0 4px 12px; }
-  :root[data-hub-side=collapsed] .hub-side .hub-foot-icon { width: 28px; height: 26px; }
-  :root[data-hub-side=collapsed] .hub-side .tb-nav__item[aria-current="page"]::before { left: 3px; }
+  :root[data-hub-rail] .hub-side .tb-side__foot.hub-side-foot { justify-content: flex-start; padding: 10px 0 4px 12px; }
+  :root[data-hub-rail] .hub-side .hub-foot-icon { width: 28px; height: 26px; }
+  :root[data-hub-rail] .hub-side .tb-nav__item[aria-current="page"]::before { left: 3px; }
 
   /* 切換動畫進行中：文字一律單行、主內容不出現橫向捲軸（避免換行抖動與捲軸閃現） */
   :root.hub-side-anim .hub-side .tb-nav__label { white-space: nowrap; -webkit-line-clamp: 1; line-clamp: 1; }
