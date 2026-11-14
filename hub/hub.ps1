@@ -151,16 +151,32 @@ function Invoke-Run([string]$Id, [string[]]$ToolArgs) {
     if ($t.Source -eq 'link') { Open-ToolLink $t.Url; return }
     if (-not $t.Manifest.cli) { Write-TbErr "$Id 沒有 CLI 入口。"; $script:RunCode = $script:TbExit.BadArgs; return }
     $entry = Join-Path $t.Dir ([string]$t.Manifest.cli.entry)
+    $savedPython = Read-InstalledToolPython $t.Dir
+    $dependencies = Join-Path $t.Dir 'runtime-deps'
+    if (-not [IO.Directory]::Exists($dependencies)) { $dependencies = '' }
+    if ($savedPython -and -not (Get-CompatibleToolPython $savedPython $Id $dependencies)) {
+        Write-TbErr '此工具的輕量版需要相容的本機 Python。'
+        $script:RunCode = $script:TbExit.Env
+        return
+    }
     switch ([string]$t.Manifest.runtime.kind) {
         'powershell' {
             $exe = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell.exe' }
-            & $exe -NoProfile -ExecutionPolicy Bypass -File $entry @ToolArgs
+            $previousPython = $env:DEVTOOLBOX_PYTHON
+            try {
+                if ($savedPython) { $env:DEVTOOLBOX_PYTHON = $savedPython }
+                & $exe -NoProfile -ExecutionPolicy Bypass -File $entry @ToolArgs
+            } finally { $env:DEVTOOLBOX_PYTHON = $previousPython }
         }
         'python' {
-            $py = Resolve-HubPython $t.Dir
+            $py = if ($savedPython) { $savedPython } else { Resolve-HubPython $t.Dir }
             if (-not $py) { Write-TbErr '找不到 Python（建 .venv、裝 py 啟動器或設 DEVTOOLBOX_PYTHON）'; $script:RunCode = $script:TbExit.Env; return }
-            & $py $entry @ToolArgs
-            $script:RunCode = $LASTEXITCODE
+            $previousPythonPath = $env:PYTHONPATH
+            try {
+                if ($dependencies) { $env:PYTHONPATH = $dependencies }
+                & $py $entry @ToolArgs
+                $script:RunCode = $LASTEXITCODE
+            } finally { $env:PYTHONPATH = $previousPythonPath }
             return
         }
         'exe'    { & $entry @ToolArgs }

@@ -152,10 +152,23 @@ function Get-PythonCandidates([string]$ToolDir) {
 }
 
 function Resolve-PythonExe([string]$ToolDir) {
+    $saved = Read-InstalledToolPython $ToolDir
+    if ($saved) { return $saved }
     foreach ($c in @(Get-PythonCandidates $ToolDir)) {
         if ($c.found) { return $c.path }
     }
     return $null
+}
+
+function Find-CompatibleToolPython([string]$Id, [string]$Abi) {
+    foreach ($candidate in @(Get-PythonCandidates $null | Where-Object found)) {
+        $exe = Get-CompatibleToolPython $candidate.path $Id '' $Abi
+        if ($exe) { return $exe }
+    }
+    foreach ($candidate in @(Get-SharedPythonCandidates)) {
+        $exe = Get-CompatibleToolPython $candidate $Id '' $Abi
+        if ($exe) { return $exe }
+    }
 }
 
 function Invoke-ToolHttp([string]$Url, [string]$Method, [int]$TimeoutMs) {
@@ -250,9 +263,21 @@ function Start-ToolService([string]$Id) {
         default { throw @{ code = 'ENV_MISSING'; message = "不支援的 runtime：$kind" } }
     }
 
-    $toolProc = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $t.Dir `
-        -WindowStyle Hidden -PassThru `
-        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    $savedPython = Read-InstalledToolPython $t.Dir
+    $dependencies = Join-Path $t.Dir 'runtime-deps'
+    if (-not [IO.Directory]::Exists($dependencies)) { $dependencies = '' }
+    if ($savedPython -and -not (Get-CompatibleToolPython $savedPython $Id $dependencies)) {
+        throw @{ code = 'ENV_MISSING'; message = '此工具的輕量版需要相容的本機 Python。請檢查 Python 環境。' }
+    }
+    $previousPython = $env:DEVTOOLBOX_PYTHON
+    $previousPythonPath = $env:PYTHONPATH
+    try {
+        if ($savedPython) { $env:DEVTOOLBOX_PYTHON = $savedPython }
+        if ($dependencies) { $env:PYTHONPATH = $dependencies }
+        $toolProc = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $t.Dir `
+            -WindowStyle Hidden -PassThru `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    } finally { $env:DEVTOOLBOX_PYTHON = $previousPython; $env:PYTHONPATH = $previousPythonPath }
     if (-not $toolProc) { throw @{ code = 'START_FAILED'; message = "無法啟動 $Id" } }
 
     # 等 READY 行（寫入 logfile）；工具啟動通常 <5 秒，給 30 秒上限
@@ -479,6 +504,8 @@ function Get-ToolsView {
         $running = $null
         $local = $t.Installed -and $t.Source -ne 'link'
         if ($local) { $running = Get-ToolStatus $t }
+        $dataPath = $null
+        if ($t.Source -in 'catalog','managed','bundled') { $dataPath = Get-OfficialToolDataPath $t.Id }
         $out += [pscustomobject]@{
             id        = $t.Id
             name      = $t.Name
@@ -489,6 +516,7 @@ function Get-ToolsView {
             hidden    = $t.Hidden
             url       = $t.Url
             path      = $t.ImportPath
+            dataPath  = $dataPath
             icon      = [string]$t.Manifest.icon
             error     = $t.Error
             runtime   = if ($t.Installed) { [string]$t.Manifest.runtime.kind } else { '' }
@@ -693,7 +721,7 @@ function Invoke-ToolUpdate($Tool, $Offer, [bool]$RestartConfirmed) {
         }
     } {
         if ($state.stopped) { Start-ToolService $id | Out-Null }
-    })
+    } -SharePython:($Tool.Source -eq 'managed'))
 }
 
 function Update-ToolLibrary($Body) {
@@ -737,6 +765,28 @@ function Update-ToolLibrary($Body) {
             $library.imports = @($library.imports | Where-Object id -CNE $id)
             $library.links = @($library.links | Where-Object id -CNE $id)
             $library.hidden = @($library.hidden | Where-Object { $_ -cne $id })
+        }
+        'uninstall' {
+            if ($Body.confirm -isnot [bool] -or -not $Body.confirm -or $tool.Source -ne 'managed') { throw '只能解除安裝由 Hub 下載的工具。' }
+            if (Get-ToolStatus $tool) { throw '請先關閉工具，再解除安裝。' }
+            Remove-HubDirectory $ToolUpdateStore $id
+            $script:ToolUpdateOffers.Remove($id)
+            $library.hidden = @($library.hidden | Where-Object { $_ -cne $id })
+        }
+        'clearData' {
+            if ($Body.confirm -isnot [bool] -or -not $Body.confirm -or $tool.Source -notin 'catalog','managed','bundled' -or -not (Get-OfficialToolDataPath $id)) {
+                throw '只能清除官方工具的預設資料目錄。'
+            }
+            if ([string]$Body.path -cne (Get-OfficialToolDataPath $id)) { throw '資料目錄已變更，請重新確認。' }
+            $dataPrefix = ([IO.Path]::GetFullPath($Body.path)).TrimEnd('\') + '\'
+            foreach ($protected in @($InstallationRoot, $ToolUpdateStore, $script:DataDir, $tool.Dir)) {
+                if ($protected -and ([IO.Path]::GetFullPath($protected).TrimEnd('\') + '\').StartsWith($dataPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw '資料目錄包含 Hub 或工具的程式檔，請手動處理。'
+                }
+            }
+            if (Get-ToolStatus $tool) { throw '請先關閉工具，再清除資料。' }
+            Remove-HubDirectory (Get-ToolDataRoot) $id
+            return
         }
         default { throw '不支援的工具管理操作。' }
     }
@@ -809,6 +859,16 @@ function Route-Request($req, $ctx) {
 
     # POST
     switch ($path) {
+        '/api/settings/reset' {
+            $b = Read-JsonBody $req
+            if ($b.confirm -isnot [bool] -or -not $b.confirm) { throw @{ code = 'BAD_REQUEST'; message = '請先確認重設。' } }
+            Save-ToolLibrary ([pscustomobject]@{ imports = @(); links = @(); hidden = @() })
+            Save-HubSettings ([pscustomobject]@{ pythonPath = '' })
+            $script:ToolUpdateOffers.Clear()
+            $script:RuntimeDetailCache.Clear()
+            Send-JsonRaw $ctx @{ ok = $true }
+            return
+        }
         '/api/tools/library' {
             try { Update-ToolLibrary (Read-JsonBody $req) }
             catch { throw @{ code = 'LIBRARY_ERROR'; message = $_.Exception.Message } }
@@ -833,13 +893,16 @@ function Route-Request($req, $ctx) {
             $b = Read-JsonBody $req
             $t = Get-UpdatableTool ([string]$b.id)
             $script:ToolUpdateOffers.Remove($t.Id)
-            $offer = Get-ToolRelease $t $script:HubManifest.version
+            $offer = Get-ToolRelease $t $script:HubManifest.version -LocalPython { param($id,$abi) Find-CompatibleToolPython $id $abi }
             $update = $null
             if ($offer) {
                 $script:ToolUpdateOffers[$t.Id] = @{ offer = $offer; current = $t.Version; expires = (Get-Date).AddMinutes(10) }
-                $update = @{ version = $offer.version; notes = $offer.notes }
+                $update = @{ version = $offer.version; notes = $offer.notes; variant = $offer.variant; size = $offer.size }
             }
-            Send-JsonRaw $ctx @{ ok = $true; update = $update }
+            $message = if (-not $offer -and $t.Source -eq 'catalog' -and $t.Id -in $script:PortablePythonToolIds) {
+                '目前沒有相容的安裝套件。輕量版需要 Python 3.11 以上及工具所需的相依套件；也可以等待發布內附 Python 的完整版。'
+            }
+            Send-JsonRaw $ctx @{ ok = $true; update = $update; message = $message }
             return
         }
         '/api/tools/update/apply' {
@@ -855,7 +918,7 @@ function Route-Request($req, $ctx) {
                 if ($b.restart -isnot [bool] -or -not $b.restart) { throw '請確認重新啟動 Hub。' }
                 $result = Invoke-HubUpdate $t $checked.offer
             } elseif ($t.Source -eq 'catalog') {
-                $result = Install-ToolRelease $ToolUpdateStore $t $checked.offer {} {} {}
+                $result = Install-ToolRelease $ToolUpdateStore $t $checked.offer {} {} {} -SharePython
             } else {
                 $result = Invoke-ToolUpdate $t $checked.offer ($b.restart -is [bool] -and $b.restart)
             }

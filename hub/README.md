@@ -54,7 +54,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Pack-Updates.ps1 -PythonHo
 
 `-WorkingTree` 可從目前工作目錄製作本機試用包。公開發版請使用已提交的版本，並以各 repo 的新版 tag 分開打包。
 
-支援 JSON 的更新器會優先使用它，並繼續接受只有 `min-hub=X.Y.Z` Label 的舊更新。每個工具第一次發布含新版更新器的套件時，可同時保留這個 Label，讓已安裝的舊 Hub 和獨立工具也能看到該次更新。從新版 Hub 首次安裝 Python 工具時，只提供附帶 Python 的套件。
+Hub 0.4.4 從完整版取出的 Python 存在 `%LOCALAPPDATA%\DevToolbox\shared-python`，有設定 `DEVTOOLBOX_DATA` 時則放在該目錄下。下一個工具能使用相容的共用 Python 時，Hub 會選擇輕量版。新版獨立啟動檔也會找這個目錄。Key Manager 的輕量 ZIP 在用完整打包流程產出時，會包含自己的 Python 相依套件，並記錄所需的 Python 版本和平台。
+
+「管理工具」可以解除安裝 Hub 下載的工具，保留其資料及共用 Python。官方工具的「清除資料」會在確認視窗列出目前使用的預設資料目錄。請先關閉工具的所有視窗。設定頁的「重設 Hub 設定」會清除外觀、指定的 Python 路徑、匯入清單、連結與顯示偏好。
+
+Python 工具預設會另外產生 `<tool-id>-X.Y.Z-lite.zip`，可與內附 Python 的 ZIP 和更新 JSON 一起發布。Hub 0.4.3 會檢查本機 Python 3.11 以上和工具所需的套件，相容時使用輕量版，否則選擇完整版。Key Manager 也會檢查 pywebview、bcrypt 和 cryptography。確認視窗會顯示選中的套件及大小。
+
+若目前只能發布輕量版，可對單一 Python 工具使用 `-LiteOnly` 和獨立的輸出資料夾，再上傳輕量 ZIP 和對應 JSON。這類 Release 需要 Hub 0.4.3 以上及已符合需求的本機 Python。獨立工具的自動更新仍下載完整版。
+
+支援 JSON 的更新器會優先使用它，並繼續接受只有 `min-hub=X.Y.Z` Label 的舊更新。每個工具第一次發布含新版更新器的套件時，可同時保留這個 Label，讓已安裝的舊更新器也能看到該次更新。
 
 ### Hub 本身的更新
 

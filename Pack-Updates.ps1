@@ -6,7 +6,8 @@ param(
     [string]$MinHub = '0.4.0',
     [string]$PythonHome,
     [string]$Wheelhouse,
-    [switch]$WorkingTree
+    [switch]$WorkingTree,
+    [switch]$LiteOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -123,6 +124,7 @@ foreach ($id in $selected) {
     $zipName = "$id-$version.zip"
     $zip = Join-Path $output $zipName
     $metadataPath = Join-Path $output "$id-$version.update.json"
+    $liteName = "$id-$version-lite.zip"
     $staging = Join-Path $output ('.verify-' + [guid]::NewGuid().ToString('N'))
     [void][IO.Directory]::CreateDirectory($staging)
     try {
@@ -154,16 +156,40 @@ foreach ($id in $selected) {
         foreach ($path in $files) {
             if (-not (Test-Path -LiteralPath (Join-Path $expanded $path))) { throw "Missing package path: $id / $path" }
         }
-        if ($config.python) {
-            Add-PythonRuntime $expanded $id
-            [IO.File]::Delete($candidate)
-            [IO.Compression.ZipFile]::CreateFromDirectory($expanded, $candidate, [IO.Compression.CompressionLevel]::Optimal, $false)
-            if ((Get-Item -LiteralPath $candidate).Length -gt $script:MaxToolZipBytes) { throw "ZIP exceeds update size limit: $id" }
-            Expand-ToolRelease $candidate (Join-Path $staging 'verified') $id $version
-        }
         $metadata = [ordered]@{ version = $version; file = $zipName }
         if ($id -ne 'dev-toolbox') { $metadata['minHub'] = $MinHub }
-        if ($config.python) { $metadata['portable'] = $true }
+        if ($config.python) {
+            $metadata['liteFile'] = $liteName
+            $metadata['portable'] = -not $LiteOnly
+            if ($LiteOnly) {
+                $metadata.file = $liteName
+                $zip = Join-Path $output $liteName
+                if (Test-Path -LiteralPath (Join-Path $output $zipName)) { throw 'Use a separate output directory for a lite-only build.' }
+            } else {
+                $liteCandidate = Join-Path $staging 'lite.zip'
+                [IO.File]::Copy($candidate, $liteCandidate)
+                Add-PythonRuntime $expanded $id
+                if ($id -eq 'key-manager') {
+                    $deps = Join-Path $expanded 'runtime\python\Lib\site-packages'
+                    $liteRoot = Join-Path $staging 'lite'
+                    Expand-ToolRelease $liteCandidate $liteRoot $id $version
+                    Copy-Item -LiteralPath $deps -Destination (Join-Path $liteRoot 'runtime-deps') -Recurse
+                    [IO.File]::Delete($liteCandidate)
+                    [IO.Compression.ZipFile]::CreateFromDirectory($liteRoot, $liteCandidate, [IO.Compression.CompressionLevel]::Optimal, $false)
+                    Expand-ToolRelease $liteCandidate (Join-Path $staging 'lite-verified') $id $version
+                    $metadata['bundledDependencies'] = $true
+                    $metadata['pythonAbi'] = & (Join-Path $expanded 'runtime\python\python.exe') -I -B -c 'import sys, sysconfig; print(sys.implementation.cache_tag + ''-'' + sysconfig.get_platform())'
+                    if ($LASTEXITCODE -or $metadata.pythonAbi -notmatch '^cpython-\d+-win[-_a-z0-9]+$') { throw 'Could not identify Key Manager wheel ABI.' }
+                }
+                [IO.File]::Delete($candidate)
+                [IO.Compression.ZipFile]::CreateFromDirectory($expanded, $candidate, [IO.Compression.CompressionLevel]::Optimal, $false)
+                if ((Get-Item -LiteralPath $candidate).Length -gt $script:MaxToolZipBytes) { throw "ZIP exceeds update size limit: $id" }
+                Expand-ToolRelease $candidate (Join-Path $staging 'verified') $id $version
+                $liteOutput = Join-Path $output $liteName
+                [IO.File]::Copy($liteCandidate, $liteOutput, $true)
+                Write-Host $liteOutput
+            }
+        }
         [IO.File]::Copy($candidate, $zip, $true)
         [IO.File]::WriteAllText($metadataPath, ($metadata | ConvertTo-Json) + "`n")
         $sourceLabel = if ($WorkingTree) { 'working tree preview' } else { $commit.Substring(0, 8) }

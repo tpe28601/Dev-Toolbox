@@ -93,14 +93,14 @@ function toast(kind, text, ms = 4200) {
 }
 
 function confirmDialog(title, text, options = {}) {
-  if (!els.confirmBackdrop.classList.contains('tb-hidden')) return Promise.resolve(false);
+  if (!els.confirmBackdrop.classList.contains('tb-hidden') || $('installProgress').open) return Promise.resolve(false);
   return new Promise((resolve) => {
     const opener = document.activeElement; // 關閉後把焦點還回去
     els.confirmIcon.innerHTML = icon('triangle-alert', { size: 22 });
     els.confirmTitle.textContent = title;
     els.confirmText.textContent = text;
     els.confirmOk.textContent = options.label || '確定';
-    els.confirmOk.classList.toggle('tb-btn--danger', !options.label);
+    els.confirmOk.classList.toggle('tb-btn--danger', Boolean(options.danger) || !options.label);
     els.confirmBackdrop.classList.remove('tb-hidden');
     els.confirmCancel.focus();
     const done = (val) => {
@@ -615,6 +615,32 @@ function hubUpdateTarget() {
   return state.hub?.version ? { id: 'dev-toolbox', name: 'Dev-Toolbox Hub', version: state.hub.version } : null;
 }
 
+const installProgress = $('installProgress');
+installProgress.addEventListener('cancel', (event) => event.preventDefault());
+
+function packageDetails(update) {
+  if (!update.size) return '';
+  const size = update.size < 1048576
+    ? Math.ceil(update.size / 1024) + ' KB' : (update.size / 1048576).toFixed(1) + ' MB';
+  return [update.variant === 'lite' ? '輕量版' : update.variant === 'portable' ? '內附 Python' : '', size]
+    .filter(Boolean).join(' · ');
+}
+
+async function downloadAndInstall(name, request) {
+  $('installProgressTitle').textContent = name;
+  const status = $('installProgressStatus');
+  status.innerHTML = icon('loader');
+  status.append(document.createTextNode('正在下載、驗證並安裝…'));
+  installProgress.showModal();
+  try {
+    // Let the browser paint the progress dialog before starting the request.
+    await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    return await apiPost('/api/tools/update/apply', request);
+  } finally {
+    installProgress.close();
+  }
+}
+
 function renderUpdateButton(button, tool) {
   let check = tool && updateChecks.get(tool.id);
   if (tool && (!check || check.current !== tool.version || (!check.pending && check.expires < Date.now() && !state.busy[tool.id]))) {
@@ -650,6 +676,7 @@ async function applyUpdate(tool) {
   }
   const details = [
     `${name} v${version} → v${update.version}`,
+    packageDetails(update),
     isHub ? 'Hub 會重新啟動，由 Hub 啟動的工具也會停止。'
       : running ? '工具會重新啟動，進行中的工作會被中斷。' : '',
     update.notes,
@@ -658,7 +685,7 @@ async function applyUpdate(tool) {
   state.busy[id] = 'update';
   renderAll();
   try {
-    const { result } = await apiPost('/api/tools/update/apply', { id, version: update.version, restart: isHub || Boolean(running) });
+    const { result } = await downloadAndInstall(name, { id, version: update.version, restart: isHub || Boolean(running) });
     if (isHub) {
       state.hubClosed = true;
       location.replace(`${result.url}/?page=settings`);
@@ -874,8 +901,8 @@ function openLink(t) {
 }
 
 function renderLibrary() {
-  const rows = state.tools.map(({ id, name, source, hidden, version, desc, url, path, icon, error, web, cli, installed }) =>
-    ({ id, name, source, hidden, version, desc, url, path, icon, error, web, cli, installed }));
+  const rows = state.tools.map(({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed }) =>
+    ({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed }));
   const fingerprint = JSON.stringify([state.loaded, rows, state.busy]);
   if (fingerprint === libraryFingerprint) return;
   libraryFingerprint = fingerprint;
@@ -929,6 +956,8 @@ function renderLibrary() {
           }));
         }
       }
+      if (t.source === 'managed') actions.append(libraryButton('解除安裝', () => confirmToolCleanup(t, 'uninstall')));
+      if (t.dataPath) actions.append(libraryButton('清除資料', () => confirmToolCleanup(t, 'clearData')));
       row.append(glyph, info, actions);
       section.append(row);
     }
@@ -942,20 +971,45 @@ async function changeLibrary(t, body) {
   if (state.busy[t.id]) return;
   state.busy[t.id] = 'library';
   renderAll();
-  try { await apiPost('/api/tools/library', body); }
+  try {
+    await apiPost('/api/tools/library', body);
+    if (body.action === 'uninstall') toast('ok', t.name + ' 已解除安裝。');
+    if (body.action === 'clearData') toast('ok', t.name + ' 的資料已清除。');
+  }
   catch (err) { toast('danger', err.message); }
   finally { delete state.busy[t.id]; await refresh(); }
 }
+
+async function confirmToolCleanup(t, action) {
+  const uninstall = action === 'uninstall';
+  const label = uninstall ? '解除安裝' : '清除資料';
+  const details = uninstall ? '會刪除 Hub 下載的程式版本，保留工具資料與共用 Python。'
+    : ['請先關閉工具（包括獨立開啟的視窗）。', '會刪除此目錄內的設定、使用紀錄及儲存在其中的專案或備份：', t.dataPath].join('\n\n');
+  if (await confirmDialog(label + ' ' + t.name, details, { label, danger: true })) {
+    await changeLibrary(t, { action, id: t.id, confirm: true, path: t.dataPath });
+  }
+}
+
+$('resetHubSettings').addEventListener('click', async () => {
+  if (!await confirmDialog('重設 Hub 設定', '清除 Hub 的外觀、Python 路徑、匯入登記、網站連結與顯示設定。已安裝的程式與工具資料會保留。', { label: '重設', danger: true })) return;
+  try {
+    await apiPost('/api/settings/reset', { confirm: true });
+    try {
+      for (const key of ['tb.theme', 'tb.accent', 'hub.bg', 'hub.bgStrength', 'hub.selected']) localStorage.removeItem(key);
+    } catch (_) { /* Browser storage may be unavailable. */ }
+    location.replace('?page=settings');
+  } catch (error) { toast('danger', error.message); }
+});
 
 async function installTool(t) {
   if (state.busy[t.id]) return;
   state.busy[t.id] = 'install';
   renderAll();
   try {
-    const { update } = await apiPost('/api/tools/update/check', { id: t.id });
-    if (!update) { toast('warn', '目前沒有相容的安裝套件。'); return; }
-    if (!await confirmDialog('安裝 ' + t.name, ['v' + update.version, update.notes].filter(Boolean).join('\n\n'), { label: '下載並安裝' })) return;
-    await apiPost('/api/tools/update/apply', { id: t.id, version: update.version, restart: false });
+    const { update, message } = await apiPost('/api/tools/update/check', { id: t.id });
+    if (!update) { toast('warn', message || '目前沒有相容的安裝套件。', 7000); return; }
+    if (!await confirmDialog('安裝 ' + t.name, ['v' + update.version, packageDetails(update), update.notes].filter(Boolean).join('\n\n'), { label: '下載並安裝' })) return;
+    await downloadAndInstall(t.name, { id: t.id, version: update.version, restart: false });
     toast('ok', t.name + ' 已安裝。');
   } catch (err) { toast('danger', '安裝失敗：' + err.message, 7000); }
   finally { delete state.busy[t.id]; await refresh(); }

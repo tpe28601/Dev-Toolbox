@@ -176,6 +176,7 @@
               </div>
             </div>
           </div>
+          <button class="tb-btn tb-btn--danger" id="resetHubSettings" type="button">重設 Hub 設定</button>
         </div>
       </section>
     </main>
@@ -208,6 +209,10 @@
         <button class="tb-btn tb-btn--primary" type="submit" id="librarySave">儲存</button>
       </div>
     </form>
+  </dialog>
+  <dialog class="tb-dialog hub-library-dialog" id="installProgress" aria-labelledby="installProgressTitle">
+    <h3 class="tb-dialog__title" id="installProgressTitle"></h3>
+    <div class="hub-install-progress" id="installProgressStatus" role="status"></div>
   </dialog>
   <div class="tb-dialog-backdrop tb-hidden" id="confirmBackdrop">
     <div class="tb-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">

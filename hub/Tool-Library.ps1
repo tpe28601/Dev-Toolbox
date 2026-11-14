@@ -27,6 +27,41 @@ function Save-ToolLibrary($Library) {
     }
 }
 
+function Get-OfficialToolDataPath([string]$Id) {
+    if ($script:OfficialToolNames.Contains($Id)) {
+        $path = Join-Path (Get-ToolDataRoot) $Id
+        if ([IO.Directory]::Exists($path)) { return $path }
+    }
+}
+
+function Remove-HubDirectory([string]$Root, [string]$Id) {
+    if (-not $script:OfficialToolNames.Contains($Id)) { throw '無法清除未知的工具目錄。' }
+    $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $path = Join-Path $rootPath $Id
+    if (-not (Test-Path -LiteralPath $path)) { return }
+    $resolved = (Resolve-Path -LiteralPath $path).ProviderPath
+    if ($resolved -ne $path -or (Split-Path -Parent $resolved) -ne $rootPath) { throw '工具目錄超出允許範圍。' }
+    for ($ancestor = $rootPath; $ancestor; $ancestor = Split-Path -Parent $ancestor) {
+        if ((Get-Item -LiteralPath $ancestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw '工具目錄的上層含有連結，請手動處理。'
+        }
+    }
+    $pending = [Collections.Generic.Stack[string]]::new()
+    $pending.Push($path)
+    while ($pending.Count) {
+        $item = Get-Item -LiteralPath $pending.Pop() -Force
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw '工具目錄內含連結，請手動處理。' }
+        if ($item.PSIsContainer) {
+            foreach ($child in Get-ChildItem -LiteralPath $item.FullName -Force) { $pending.Push($child.FullName) }
+        }
+    }
+    $trash = Join-Path $rootPath ('.removed-' + [guid]::NewGuid().ToString('N'))
+    [IO.Directory]::Move($path,$trash)
+    if ((Split-Path -Parent $trash) -ne $rootPath) { throw '清除路徑超出允許範圍。' }
+    try { [IO.Directory]::Delete($trash,$true) }
+    catch { throw "已移出工具目錄，但有檔案無法清除：$trash" }
+}
+
 function Read-ImportedTool([string]$Directory) {
     if ($Directory -notmatch '^[A-Za-z]:[\\/]') { throw '請指定本機工具資料夾的完整路徑。' }
     $m = Read-JsonFile (Join-Path $Directory 'tool.json')
