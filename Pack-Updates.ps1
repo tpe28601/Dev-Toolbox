@@ -70,9 +70,8 @@ function Add-PythonRuntime([string]$Destination, [string]$Id) {
         if (-not (Test-Path -LiteralPath $dir -PathType Container)) { throw "PythonHome is missing $name." }
         $target = Join-Path $runtime $name
         [void][IO.Directory]::CreateDirectory($target)
-        foreach ($item in @(Get-ChildItem -LiteralPath $dir | Where-Object { $_.Name -notin 'site-packages','__pycache__','test','tests','idlelib','ensurepip' })) {
-            Copy-Item -LiteralPath $item.FullName -Destination $target -Recurse
-        }
+        & robocopy.exe $dir $target /E /XJ /XD site-packages __pycache__ test tests idlelib ensurepip /XF '*.pyc' /NFL /NDL /NJH /NJS /NP | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "Could not copy Python $name." }
     }
     $python = Join-Path $runtime 'python.exe'
     & $python -I -B -c 'import sys, ssl, tkinter; assert sys.version_info >= (3, 11); tkinter.Tcl()'

@@ -523,10 +523,10 @@ function openSettings() {
 
 // ---------- Hub 與工具操作 ----------
 async function refresh() {
-  if (state.hubClosed) return;
+  if (state.hubClosed || $('libraryDialog').open) return;
   try {
     const data = await apiGet('/api/tools');
-    if (state.hubClosed) return;
+    if (state.hubClosed || $('libraryDialog').open) return;
     state.tools = data.tools || [];
     state.loaded = true;
     if (!state.selected || !toolById(state.selected)) {
@@ -855,6 +855,11 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 
 let libraryFingerprint = '';
 let editingLink = null;
+let libraryDialogSession = 0;
+
+function isCurrentLibraryDialog(session) {
+  return $('libraryDialog').open && session === libraryDialogSession;
+}
 
 function libraryButton(label, action, primary = false) {
   const b = el('button', primary ? 'tb-btn tb-btn--primary' : 'tb-btn', label);
@@ -957,8 +962,10 @@ async function installTool(t) {
 }
 
 function showLibraryDialog(mode, t = null) {
+  libraryDialogSession += 1;
   editingLink = t;
   $('libraryForm').reset();
+  $('libraryBrowse').disabled = $('librarySave').disabled = false;
   $('libraryTitle').textContent = mode === 'import' ? '匯入本機工具' : t ? '編輯網站連結' : '新增網站連結';
   $('importFields').hidden = mode !== 'import';
   $('linkFields').hidden = mode !== 'link';
@@ -980,20 +987,25 @@ $('importTool').addEventListener('click', () => showLibraryDialog('import'));
 $('addLink').addEventListener('click', () => showLibraryDialog('link'));
 $('libraryCancel').addEventListener('click', () => $('libraryDialog').close());
 $('libraryBrowse').addEventListener('click', async () => {
+  const session = libraryDialogSession;
   const b = $('libraryBrowse');
   b.disabled = true;
   $('librarySave').disabled = true;
   $('libraryError').textContent = '';
   try {
     const { path } = await apiPost('/api/tools/folder', {});
-    if (path && $('libraryDialog').open) $('libraryPath').value = path;
-  } catch (err) { $('libraryError').textContent = err.message; }
-  finally { b.disabled = false; $('librarySave').disabled = false; }
+    if (path && isCurrentLibraryDialog(session)) $('libraryPath').value = path;
+  } catch (err) {
+    if (isCurrentLibraryDialog(session)) $('libraryError').textContent = err.message;
+  } finally {
+    if (isCurrentLibraryDialog(session)) b.disabled = $('librarySave').disabled = false;
+  }
 });
 $('libraryForm').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const b = $('librarySave');
   if (b.disabled) return;
+  const session = libraryDialogSession;
   const body = $('linkFields').hidden
     ? { action: 'import', path: $('libraryPath').value }
     : { action: 'link', id: editingLink?.id, name: $('libraryName').value, url: $('libraryUrl').value,
@@ -1002,10 +1014,13 @@ $('libraryForm').addEventListener('submit', async (ev) => {
   $('libraryError').textContent = '';
   try {
     await apiPost('/api/tools/library', body);
-    $('libraryDialog').close();
+    if (isCurrentLibraryDialog(session)) $('libraryDialog').close();
     await refresh();
-  } catch (err) { $('libraryError').textContent = err.message; }
-  finally { b.disabled = false; }
+  } catch (err) {
+    if (isCurrentLibraryDialog(session)) $('libraryError').textContent = err.message;
+  } finally {
+    if (isCurrentLibraryDialog(session)) b.disabled = false;
+  }
 });
 
 // ---------- 綁定 ----------

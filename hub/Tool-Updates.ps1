@@ -179,12 +179,21 @@ function Expand-ToolRelease([string]$Zip, [string]$Destination, [string]$Id, [st
             if (($entry.ExternalAttributes -shr 16 -band 0xF000) -eq 0xA000) { throw '更新套件包含符號連結。' }
             $total += $entry.Length
             if ($total -gt 500MB) { throw '更新套件解壓後超過 500 MB。' }
+            # Windows PowerShell 5.1 can still use the legacy Win32 path limit.
+            $path = [IO.Path]::GetFullPath($path)
+            if ($path.Length -ge 248 -and $env:OS -eq 'Windows_NT' -and -not $path.StartsWith('\\?\')) {
+                $path = if ($path.StartsWith('\\')) { '\\?\UNC\' + $path.Substring(2) } else { '\\?\' + $path }
+            }
             if ($entry.FullName -match '[/\\]$') {
                 [void][IO.Directory]::CreateDirectory($path)
                 continue
             }
             [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))
-            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $path)
+            try {
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $path)
+            } catch {
+                throw "無法解壓套件檔案 $($entry.FullName)：$($_.Exception.GetBaseException().Message)"
+            }
         }
     } finally { $archive.Dispose() }
 
@@ -224,7 +233,7 @@ function Install-ToolRelease([string]$Store, $Tool, $Offer, [scriptblock]$Before
     $toolStore = Join-Path $Store $Tool.Id
     [void][IO.Directory]::CreateDirectory($toolStore)
     $lock = [IO.File]::Open((Join-Path $toolStore 'update.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
-    $stage = Join-Path $toolStore ([guid]::NewGuid().ToString('N'))
+    $stage = Join-Path $toolStore ('.stage-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
     try {
         $previous = Read-ActiveToolVersion $toolStore
         if ($previous -and (ConvertTo-ToolVersion $previous) -ge $version) { throw '這個工具已更新，請重新檢查版本。' }
