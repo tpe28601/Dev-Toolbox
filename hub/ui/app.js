@@ -793,13 +793,20 @@ function hubUpdateTarget() {
 }
 
 // 設定 → 更新卡片的「Hub 版本」列：目前版本、從哪裡執行、檢查狀態；「檢查更新」略過快取重查
-const RUN_FROM = { git: '從 git 資料夾執行', store: '從 Hub 更新資料夾執行', folder: '從安裝資料夾執行' };
+// 執行位置：說明列後面的短句，詳細說明放滑鼠提示
+const RUN_FROM = {
+  git: ['從 git 資料夾執行，可用 git pull 更新', '用「下載更新」取得的新版會放在 Hub 的更新資料夾，不會改動 repo。'],
+  store: ['從 Hub 更新資料夾執行', ''],
+  folder: ['從安裝資料夾執行', ''],
+};
 function renderHubStatus() {
   const target = hubUpdateTarget();
   const check = target && updateChecks.get(target.id);
   const runFrom = (state.hub && state.hub.runFrom) || (check && check.runFrom) || '';
-  $('hubVerText').textContent = target ? `v${target.version}` + (RUN_FROM[runFrom] ? ` · ${RUN_FROM[runFrom]}` : '') : '';
-  $('hubGitNote').classList.toggle('tb-hidden', runFrom !== 'git');
+  $('hubVerText').textContent = target ? `v${target.version}` : '';
+  const where = RUN_FROM[runFrom];
+  $('hubRunFrom').textContent = where ? ` · ${where[0]}` : '';
+  $('hubRunFrom').title = where ? where[1] : '';
   const status = $('hubUpdateStatus');
   let text = '檢查中…', tone = 'muted', title = '';
   const oldServer = state.hub && !(Array.isArray(state.hub.features) && state.hub.features.includes('hub-update-status'));
