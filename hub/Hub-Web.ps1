@@ -611,6 +611,8 @@ function Get-ToolsView {
             version   = $t.Version
             installed = $t.Installed
             canUpdate = $local -and $script:OfficialToolNames.Contains($t.Id)
+            # 官方工具的 GitHub repo（管理工具「⋯」選單的「在 GitHub 查看」）
+            repo      = $(if ($script:ToolReleaseRepos.ContainsKey($t.Id)) { [string]$script:ToolReleaseRepos[$t.Id] } else { $null })
             source    = $t.Source
             hidden    = $t.Hidden
             url       = $t.Url

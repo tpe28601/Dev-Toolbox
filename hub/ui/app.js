@@ -1115,8 +1115,8 @@ function openLink(t) {
 }
 
 function renderLibrary() {
-  const rows = state.tools.map(({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed, canUpdate }) =>
-    ({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed, canUpdate }));
+  const rows = state.tools.map(({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed, canUpdate, repo }) =>
+    ({ id, name, source, hidden, version, desc, url, path, dataPath, icon, error, web, cli, installed, canUpdate, repo }));
   // 已安裝、可更新的官方工具：檢查有沒有新版（共用工具頁的快取），有就在列上顯示「更新」
   for (const t of state.tools) if (t.installed && t.canUpdate) ensureUpdateCheck(t);
   const offers = rows.map((t) => updateChecks.get(t.id)?.offer?.version || '');
@@ -1191,6 +1191,10 @@ function renderLibrary() {
             }
           }, true]);
         }
+      }
+      // 官方工具：在 GitHub 查看（放在一般操作之後、刪除類操作之前）
+      if (/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(t.repo || '')) {
+        more.push(['在 GitHub 查看', 'github', () => window.open(`https://github.com/${t.repo}`, '_blank', 'noopener,noreferrer'), false]);
       }
       if (t.source === 'managed') more.push(['解除安裝', 'circle-x', () => confirmToolCleanup(t, 'uninstall'), true]);
       if (t.dataPath) more.push(['清除資料', 'trash-2', () => confirmToolCleanup(t, 'clearData'), true]);
