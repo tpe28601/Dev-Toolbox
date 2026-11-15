@@ -429,3 +429,15 @@ a.tb-btn, a.tb-btn:hover { text-decoration: none; }
 .hub-about__head { flex-wrap: wrap; align-items: flex-start; }
 .hub-about__main { flex: 1 1 280px; min-width: 0; }
 .hub-about__head > .hub-update-actions { margin-left: auto; }
+/* 關於：「查看授權條款」是按鈕但長得像連結；授權視窗用等寬字、可捲動 */
+button.hub-about__link { border: 0; background: none; padding: 0; font: inherit; cursor: pointer; }
+.hub-license-dialog { width: min(640px, calc(100vw - 32px)); }
+.hub-license-dialog .tb-dialog__title { display: flex; align-items: center; gap: 8px; }
+.hub-license-dialog .tb-dialog__title .tb-icon { color: var(--tb-accent); }
+.hub-license-text { margin: var(--tb-space-3) 0; max-height: min(60vh, 460px); overflow: auto; padding: var(--tb-space-3) var(--tb-space-4);
+  font-size: var(--tb-fs-sm); line-height: 1.6; overflow-wrap: anywhere;
+  color: var(--tb-text); background: color-mix(in srgb, var(--tb-text) 5%, transparent); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-lg); }
+.hub-license-text:focus-visible { outline: none; box-shadow: var(--tb-focus); }
+.hub-license-text p { margin: 0 0 var(--tb-space-3); }
+.hub-license-text p:last-child { margin-bottom: 0; }
+.hub-license-text p:first-child { font-weight: 600; }

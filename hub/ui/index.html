@@ -250,7 +250,7 @@
               <dt>GitHub</dt>
               <dd><a class="hub-about__link" href="https://github.com/tpe28601/Dev-Toolbox" target="_blank" rel="noopener noreferrer"><i data-hub-icon="github"></i>github.com/tpe28601/Dev-Toolbox</a></dd>
               <dt>授權</dt>
-              <dd><span class="tb-badge">MIT License</span> <a class="hub-about__link" href="https://github.com/tpe28601/Dev-Toolbox/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">查看授權條款</a></dd>
+              <dd><span class="tb-badge">MIT License</span> <button class="hub-about__link" type="button" id="licenseOpen">查看授權條款</button></dd>
             </dl>
           </div>
         </div>
@@ -328,6 +328,22 @@
       <span class="hub-icon-actions__spacer"></span>
       <button class="tb-btn" type="button" id="iconCancel">取消</button>
       <button class="tb-btn tb-btn--primary" type="button" id="iconSave">套用</button>
+    </div>
+  </dialog>
+  <!-- 授權條款（與 repo 根目錄 LICENSE 相同；Hub 更新套件不含 LICENSE 檔，所以內嵌在介面） -->
+  <dialog class="tb-dialog hub-license-dialog" id="licenseDialog" aria-labelledby="licenseTitle">
+    <h2 class="tb-dialog__title" id="licenseTitle"><i data-tb-icon="info"></i>MIT License</h2>
+    <div class="hub-license-text" tabindex="0">
+      <p>MIT License</p>
+      <p>Copyright (c) 2026 tpe28601</p>
+      <p>Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
+      <p>The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
+      <p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+    </div>
+    <div class="tb-dialog__actions">
+      <a class="tb-btn tb-btn--ghost" href="https://github.com/tpe28601/Dev-Toolbox/blob/main/LICENSE" target="_blank" rel="noopener noreferrer"><i data-hub-icon="github"></i>在 GitHub 查看</a>
+      <span class="hub-icon-actions__spacer"></span>
+      <button class="tb-btn tb-btn--primary" type="button" id="licenseClose">關閉</button>
     </div>
   </dialog>
   <dialog class="tb-dialog hub-library-dialog" id="installProgress" aria-labelledby="installProgressTitle">

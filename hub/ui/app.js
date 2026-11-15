@@ -1475,6 +1475,12 @@ async function executeCleanup() {
 }
 $('cleanupPreview').addEventListener('click', previewCleanup);
 
+// 設定 → 關於：「查看授權條款」在 Hub 內開啟授權視窗（點背景或 Esc 也能關閉）
+const licenseDialog = $('licenseDialog');
+$('licenseOpen').addEventListener('click', () => licenseDialog.showModal());
+$('licenseClose').addEventListener('click', () => licenseDialog.close());
+licenseDialog.addEventListener('click', (ev) => { if (ev.target === licenseDialog) licenseDialog.close(); });
+
 // 伺服器在 /api/health 回報 features；舊伺服器沒有這個欄位或缺少功能時，先在頁面上提示要重新啟動
 const UI_FEATURES = ['cleanup', 'hub-update-status'];
 function syncHubFeatures(h) {
