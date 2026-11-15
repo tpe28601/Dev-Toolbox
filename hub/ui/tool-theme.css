@@ -263,3 +263,60 @@
 :root[data-theme=light][data-hub-bg=liquid] { --hub-lq-btn-shadow: 0 2px 6px -2px rgba(40, 60, 110, 0.22); }
 :root[data-hub-bg=liquid] :is(.tb-btn, .tb-nav__item[aria-current="page"], .tb-seg__btn[aria-pressed="true"]) {
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--hub-lq-btn-shadow); }
+
+/* ----- 液態玻璃：嵌入工具自己的按鈕與輸入框 -----
+   Git Ref Manager（.btn／.icon-btn／.browse-btn、設定檔下拉、無 class 的輸入框）與 Key Manager（.button 系列、
+   SSH 路徑與 Git 設定欄位）沒有用 ui-kit 的 class，這裡比照 .tb-btn／.tb-input 的液態玻璃樣式：膠囊外形、
+   上緣高光、滑過時高光流動。只在嵌入（data-embedded）且液態玻璃時生效，Hub 本身與其他風格不受影響。 */
+:root[data-embedded][data-hub-bg=liquid] :is(.btn, .icon-btn, .button, .hlk-notice__x, .branch-toggle) { border-radius: 999px; }
+:root[data-embedded][data-hub-bg=liquid] :is(.btn, .icon-btn, .button):not(.ghost) {
+  background-image: linear-gradient(110deg, transparent 35%, color-mix(in srgb, var(--hub-lq-hi) 45%, transparent) 50%, transparent 65%),
+    linear-gradient(180deg, color-mix(in srgb, var(--hub-lq-hi) 22%, transparent), transparent 60%);
+  background-size: 260% 100%, 100% 100%; background-position: 120% 0, 0 0;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--hub-lq-btn-shadow);
+  transition: background-position .6s ease, background-color var(--tb-transition), border-color var(--tb-transition), color var(--tb-transition); }
+:root[data-embedded][data-hub-bg=liquid] :is(.btn, .icon-btn, .button):not(.ghost):not(:disabled):hover { background-position: -20% 0, 0 0; }
+/* 一般（非主要、非危險）按鈕用和 .tb-btn 相同的半透明玻璃底 */
+:root[data-embedded][data-hub-bg=liquid] :is(.btn:not(.primary):not(.danger), .icon-btn, .button:not(.primary):not(.danger):not(.ghost)) {
+  background-color: var(--tb-surface-2); }
+/* 單行輸入框與下拉選單：膠囊外形（多行文字框維持圓角矩形） */
+:root[data-embedded][data-hub-bg=liquid] :is(input:not([type]), input[type=text], input[type=search], input[type=url], input[type=number], select):not(.tb-dp *) {
+  border-radius: 999px; }
+/* ----- 液態玻璃：嵌入工具的選取方塊、下拉清單、標籤與內層框（這些要有資料才會出現） ----- */
+/* 選取方塊（Build Runner「選擇 Workspace」）：膠囊玻璃；選取時保留工具原本的強調色底，邊框用強調色 */
+:root[data-embedded][data-hub-bg=liquid] .build-workspace-card {
+  border-radius: 999px; border-color: var(--tb-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--hub-lq-hi) 22%, transparent), transparent 60%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--hub-lq-btn-shadow); }
+:root[data-embedded][data-hub-bg=liquid] .build-workspace-card:not(:has(input:checked)) { background-color: var(--tb-surface-2); }
+:root[data-embedded][data-hub-bg=liquid] .build-workspace-card:is(:hover, :has(input:checked)) { border-color: var(--tb-accent); }
+/* 下拉清單（Build Runner 分支選單）：和 Hub 選單相同的玻璃 */
+:root[data-embedded][data-hub-bg=liquid] .branch-menu {
+  background-color: var(--hub-lq-solid); border-color: var(--tb-border); border-radius: var(--tb-radius-lg);
+  backdrop-filter: blur(12px) saturate(180%); -webkit-backdrop-filter: blur(12px) saturate(180%);
+  box-shadow: inset 0 1px 0 var(--hub-lq-hi), var(--hub-lq-shadow); }
+/* 標籤（Key Manager 的資料夾、欄位、用途標籤）：膠囊 */
+:root[data-embedded][data-hub-bg=liquid] :is(.pf-folder, .pf-field-chip, .usage-chip) { border-radius: 999px; }
+/* 內層框與卡片：大圓角＋上緣高光（底色沿用工具的主題變數，液態玻璃下本來就是半透明） */
+:root[data-embedded][data-hub-bg=liquid] :is(.profile-card, .profile-empty, .form-panel, .table-wrap, .notice, .backup-preview,
+  .dst-section, .subs-details, .result, .confirm-bar, .enter-banner, .hlk-msg, .hlk-drop__box, .hlk-notice) {
+  border-radius: var(--tb-radius-lg); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 60%, transparent); }/* 清單項目（Key Manager 備份清單）：比照選取方塊，玻璃膠囊；選取中保留工具原本的強調色外框 */
+:root[data-embedded][data-hub-bg=liquid] .backup-item {
+  border-radius: 999px; padding-inline: 16px;
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--hub-lq-hi) 22%, transparent), transparent 60%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--hub-lq-btn-shadow); }
+:root[data-embedded][data-hub-bg=liquid] .backup-item.is-selected {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), 0 0 0 3px color-mix(in srgb, var(--tb-accent) 18%, transparent); }
+/* 標籤加上淡淡的上緣高光，和膠囊按鈕一致 */
+:root[data-embedded][data-hub-bg=liquid] :is(.pf-folder, .pf-field-chip, .usage-chip) {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 55%, transparent); }/* 上方分頁（所有工具的 .tb-tab）：和膠囊按鈕相同的玻璃高光，滑過時高光從左流到右；目前分頁保留強調色底與邊框 */
+:root[data-embedded][data-hub-bg=liquid] .tb-tab {
+  border-radius: 999px;
+  background-image: linear-gradient(110deg, transparent 35%, color-mix(in srgb, var(--hub-lq-hi) 45%, transparent) 50%, transparent 65%),
+    linear-gradient(180deg, color-mix(in srgb, var(--hub-lq-hi) 22%, transparent), transparent 60%);
+  background-size: 260% 100%, 100% 100%; background-position: 120% 0, 0 0;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--hub-lq-btn-shadow);
+  transition: background-position .6s ease, background-color var(--tb-transition), border-color var(--tb-transition), color var(--tb-transition); }
+:root[data-embedded][data-hub-bg=liquid] .tb-tab:not([aria-selected="true"]):not(.is-active) { background-color: var(--tb-surface-2); }
+:root[data-embedded][data-hub-bg=liquid] .tb-tab:hover { background-position: -20% 0, 0 0; }
+:root[data-embedded][data-hub-bg=liquid] .tb-tab:focus-visible { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hub-lq-hi) 70%, transparent), var(--tb-focus); }
