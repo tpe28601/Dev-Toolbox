@@ -1817,7 +1817,6 @@ new MutationObserver(syncNavFade).observe(els.nav, { childList: true });
     const h = await apiGet('/api/health');
     state.hub = h;
     els.hubVersion.textContent = `Hub v${h.version}`;
-    $('aboutVer').textContent = `v${h.version}`;
     els.hubInfo.textContent = `127.0.0.1:${h.port} · 只綁本機`;
     // 側欄收合時只顯示盾牌圖示：滑過看完整位址，點一下複製網址
     $('hubInfoIcon').title = `http://127.0.0.1:${h.port}（只綁本機，點一下複製網址）`;

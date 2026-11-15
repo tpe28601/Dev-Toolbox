@@ -397,8 +397,7 @@
 .hub-update-status[data-tone="ok"] { color: var(--tb-ok); }
 .hub-update-status[data-tone="warn"] { color: var(--tb-warn); }
 .hub-update-status[data-tone="accent"] { color: var(--tb-accent); font-weight: 600; }
-.hub-advanced__row > .hub-update-actions { flex: 0 0 auto; display: flex; gap: var(--tb-space-2); flex-wrap: wrap; justify-content: flex-end; }
-.hub-cleanup-row { margin-top: var(--tb-space-3); padding-top: var(--tb-space-3); border-top: 1px solid var(--tb-border); }
+.hub-update-actions { flex: 0 0 auto; display: flex; gap: var(--tb-space-2); flex-wrap: wrap; justify-content: flex-end; }
 /* 總覽空狀態：和其他空狀態一致（置中、虛線框），按鈕是一般按鈕樣式（連結不加底線） */
 a.tb-btn, a.tb-btn:hover { text-decoration: none; }
 .hub-empty.tb-empty { padding: var(--tb-space-6) var(--tb-space-4); }
@@ -426,3 +425,7 @@ a.tb-btn, a.tb-btn:hover { text-decoration: none; }
 .hub-about__link:hover { text-decoration: underline; }
 .hub-about__link:focus-visible { outline: none; box-shadow: var(--tb-focus); }
 .hub-about__link .tb-icon { width: 15px; height: 15px; }
+/* 關於：Hub 本身的版本與更新狀態放在標題列，右側是「檢查更新」與「下載更新」 */
+.hub-about__head { flex-wrap: wrap; align-items: flex-start; }
+.hub-about__main { flex: 1 1 280px; min-width: 0; }
+.hub-about__head > .hub-update-actions { margin-left: auto; }

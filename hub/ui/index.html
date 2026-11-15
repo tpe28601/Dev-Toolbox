@@ -208,18 +208,7 @@
           </div>
           <div class="tb-card hub-advanced" id="cleanupCard">
             <h3 class="tb-section-title"><i data-tb-icon="refresh-cw"></i>更新</h3>
-            <div class="hub-advanced__row hub-update-row">
-              <div>
-                <div class="tb-choice__title">Hub 版本 <span class="hub-update-ver" id="hubVerText"></span></div>
-                <div class="tb-small hub-update-status" id="hubUpdateStatus">檢查中…</div>
-                <div class="tb-muted tb-small tb-hidden" id="hubGitNote">從 git 執行，也可以用 git pull 更新。用這裡的「更新 Hub」下載的新版會放在 Hub 的更新資料夾，不會改動 repo。</div>
-              </div>
-              <div class="hub-update-actions">
-                <button class="tb-btn" id="hubCheck" type="button"><i data-tb-icon="refresh-cw" data-anim="pop"></i>檢查更新</button>
-                <button class="tb-btn tb-btn--primary tb-hidden" id="hubUpdate" type="button"></button>
-              </div>
-            </div>
-            <div class="hub-advanced__row hub-cleanup-row">
+            <div class="hub-advanced__row">
               <div>
                 <div class="tb-choice__title">清理舊版檔案</div>
                 <div class="tb-muted tb-small">Hub 更新工具（含 Hub 本體）時，舊版會留在更新資料夾。每個工具保留目前版與一個舊版，更早的版本可以清理。先預覽，預覽不會動到任何檔案。</div>
@@ -241,11 +230,18 @@
           </div>
           <div class="tb-card hub-advanced hub-about" id="aboutCard">
             <h3 class="tb-section-title"><i data-tb-icon="info"></i>關於</h3>
+            <!-- 左：產品、版本與 Hub 本身的更新狀態；右：檢查更新／下載更新 -->
             <div class="hub-about__head">
               <span class="hub-library-icon" aria-hidden="true"><i data-tb-icon="terminal"></i></span>
-              <div>
-                <div class="tb-choice__title">Dev-Toolbox Hub <span class="hub-update-ver" id="aboutVer"></span></div>
+              <div class="hub-about__main">
+                <div class="tb-choice__title">Dev-Toolbox Hub <span class="hub-update-ver" id="hubVerText"></span></div>
                 <div class="tb-muted tb-small">本機開發工具的統一入口：安裝、啟動、更新與管理工具。</div>
+                <div class="tb-small hub-update-status" id="hubUpdateStatus">檢查中…</div>
+                <div class="tb-muted tb-small tb-hidden" id="hubGitNote">從 git 執行，也可以用 git pull 更新。用「下載更新」取得的新版會放在 Hub 的更新資料夾，不會改動 repo。</div>
+              </div>
+              <div class="hub-update-actions">
+                <button class="tb-btn" id="hubCheck" type="button"><i data-tb-icon="refresh-cw" data-anim="pop"></i>檢查更新</button>
+                <button class="tb-btn tb-btn--primary tb-hidden" id="hubUpdate" type="button"></button>
               </div>
             </div>
             <dl class="hub-about__list">
