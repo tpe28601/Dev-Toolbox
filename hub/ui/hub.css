@@ -416,3 +416,13 @@ a.tb-btn, a.tb-btn:hover { text-decoration: none; }
 /* 管理工具：有新版的工具在名稱下方顯示小的「更新 vX」按鈕（不佔用固定的三格操作欄） */
 .hub-lib-update { margin-top: 6px; padding: 3px 10px; min-height: 0; font-size: var(--tb-fs-sm); justify-self: start; width: max-content; }
 .hub-lib-update .tb-icon { width: 14px; height: 14px; }
+/* 設定 → 關於：產品、作者、GitHub、授權（沿用管理工具的圖示格與卡片樣式） */
+.hub-about__head { display: flex; align-items: center; gap: var(--tb-space-3); }
+.hub-about__list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px var(--tb-space-4); margin: var(--tb-space-3) 0 0;
+  padding-top: var(--tb-space-3); border-top: 1px solid var(--tb-border); font-size: var(--tb-fs-sm); }
+.hub-about__list dt { color: var(--tb-muted); }
+.hub-about__list dd { margin: 0; min-width: 0; overflow-wrap: anywhere; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hub-about__link { display: inline-flex; align-items: center; gap: 6px; color: var(--tb-accent); text-decoration: none; border-radius: var(--tb-radius-sm); }
+.hub-about__link:hover { text-decoration: underline; }
+.hub-about__link:focus-visible { outline: none; box-shadow: var(--tb-focus); }
+.hub-about__link .tb-icon { width: 15px; height: 15px; }
