@@ -805,16 +805,18 @@ function renderHubStatus() {
   const oldServer = state.hub && !(Array.isArray(state.hub.features) && state.hub.features.includes('hub-update-status'));
   if (!target) { text = '讀取中…'; }
   // 舊伺服器（0.5.1 以前）的檢查結果不可信（陣列沒展開，永遠查不到新版），直接請使用者重開
-  else if (oldServer) { text = RESTART_MSG; tone = 'warn'; }
+  // 狀態是右側按鈕旁的小標籤：文字精簡（版本已在標題），完整說明放在滑鼠提示
+  else if (oldServer) { text = '需要重新啟動 Hub'; tone = 'warn'; title = RESTART_MSG; }
   else if (check && !check.pending) {
-    if (check.restart) { text = RESTART_MSG; tone = 'warn'; }
-    else if (check.status === 'error') { text = '無法連到 GitHub（離線或被擋），稍後會再試。'; tone = 'warn'; title = check.message; }
+    if (check.restart) { text = '需要重新啟動 Hub'; tone = 'warn'; title = RESTART_MSG; }
+    else if (check.status === 'error') { text = '無法連到 GitHub'; tone = 'warn'; title = (check.message || '') + '（離線或被擋，稍後會再試）'; }
     else if (check.offer) { text = `有新版 v${check.offer.version}`; tone = 'accent'; }
-    else { text = `已是最新 v${target.version}`; tone = 'ok'; }
+    else { text = '已是最新'; tone = 'ok'; title = `目前 v${target.version} 已是 GitHub 上的最新版`; }
   }
-  status.textContent = text;
+  status.innerHTML = tone === 'ok' ? icon('check', { size: 12 }) : tone === 'warn' ? icon('triangle-alert', { size: 12 }) : '';
+  status.append(document.createTextNode(text));
   status.title = title;
-  status.dataset.tone = tone;
+  status.className = 'tb-badge hub-update-status' + ({ ok: ' tb-badge--ok', warn: ' tb-badge--warn', accent: ' tb-badge--accent' }[tone] || '');
   $('hubCheck').disabled = !target || Boolean(check && check.pending) || Boolean(state.busy[target && target.id]);
 }
 $('hubCheck').addEventListener('click', () => {

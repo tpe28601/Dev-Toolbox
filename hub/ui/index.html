@@ -236,10 +236,10 @@
               <div class="hub-about__main">
                 <div class="tb-choice__title">Dev-Toolbox Hub <span class="hub-update-ver" id="hubVerText"></span></div>
                 <div class="tb-muted tb-small">本機開發工具的統一入口：安裝、啟動、更新與管理工具。</div>
-                <div class="tb-small hub-update-status" id="hubUpdateStatus">檢查中…</div>
                 <div class="tb-muted tb-small tb-hidden" id="hubGitNote">從 git 執行，也可以用 git pull 更新。用「下載更新」取得的新版會放在 Hub 的更新資料夾，不會改動 repo。</div>
               </div>
               <div class="hub-update-actions">
+                <span class="tb-badge hub-update-status" id="hubUpdateStatus" role="status">檢查中…</span>
                 <button class="tb-btn" id="hubCheck" type="button"><i data-tb-icon="refresh-cw" data-anim="pop"></i>檢查更新</button>
                 <button class="tb-btn tb-btn--primary tb-hidden" id="hubUpdate" type="button"></button>
               </div>
