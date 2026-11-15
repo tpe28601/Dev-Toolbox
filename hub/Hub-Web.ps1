@@ -1004,6 +1004,38 @@ function Start-BackgroundRest([string]$Uri, $Headers, [int]$TimeoutSec = 12) {
     return @{ PS = $ps; Async = $ps.BeginInvoke() }
 }
 
+# GitHub Releases 查詢：帶 If-None-Match（ETag），304 不計入 GitHub 未登入每小時 60 次的上限。
+# 回傳 @{ etag; releases } 或 @{ notModified } 或 @{ httpError; remaining; reset }；連線失敗 throw。
+$script:ReleaseCache = @{}   # repo → @{ ETag; Releases; At }
+function Start-ReleaseQuery([string]$Uri, [string]$ETag, [int]$TimeoutSec = 12) {
+    $ps = [PowerShell]::Create()
+    [void]$ps.AddScript({
+        param($u, $etag, $t)
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $rq = [Net.HttpWebRequest]::Create($u)
+        $rq.Timeout = $t * 1000; $rq.ReadWriteTimeout = $t * 1000
+        $rq.UserAgent = 'Dev-Toolbox-Hub'; $rq.Accept = 'application/vnd.github+json'
+        $rq.Headers['X-GitHub-Api-Version'] = '2022-11-28'
+        if ($etag) { $rq.Headers['If-None-Match'] = $etag }
+        try { $resp = $rq.GetResponse() }
+        catch [Net.WebException] {
+            $r = $_.Exception.Response
+            if (-not $r) { throw }
+            try {
+                if ([int]$r.StatusCode -eq 304) { return @{ notModified = $true } }
+                return @{ httpError = [int]$r.StatusCode; remaining = [string]$r.Headers['X-RateLimit-Remaining']; reset = [string]$r.Headers['X-RateLimit-Reset'] }
+            } finally { $r.Close() }
+        }
+        try {
+            $reader = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
+            # 存在變數裡（不要直接輸出）：Windows PowerShell 5.1 才不會把陣列當一筆或拆開
+            $list = $reader.ReadToEnd() | ConvertFrom-Json
+            return @{ etag = [string]$resp.Headers['ETag']; releases = @($list) }
+        } finally { $resp.Close() }
+    }).AddArgument($Uri).AddArgument($ETag).AddArgument($TimeoutSec)
+    return @{ PS = $ps; Async = $ps.BeginInvoke() }
+}
+
 # 完成回傳 @{ Data }；還在跑回傳 $null；失敗 throw
 function Step-BackgroundRest($Job) {
     if (-not $Job.Async.IsCompleted) { return $null }
@@ -1304,23 +1336,46 @@ function Route-Request($req, $ctx) {
             $script:ToolUpdateOffers.Remove($t.Id)
             $repo = $script:ToolReleaseRepos[$t.Id]
             if (-not $repo) { throw '這個工具沒有設定公開更新來源。' }
-            # GitHub 查詢在背景 runspace 跑（最多 12 秒），Hub 在等的時候照常回應其他請求
-            $headers = @{ Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
-            $job = Start-BackgroundRest "https://api.github.com/repos/$repo/releases?per_page=100" $headers 12
+            # GitHub 查詢在背景 runspace 跑（最多 12 秒），Hub 在等的時候照常回應其他請求。
+            # 同一個 repo 2 分鐘內直接用快取（按「檢查更新」force 時才重查）；重查帶 ETag，沒變動回 304、不計入次數上限。
+            $cache = $script:ReleaseCache[$repo]
+            $fresh = $cache -and ((Get-Date) - $cache.At).TotalSeconds -lt 120 -and -not ($b.force -is [bool] -and $b.force)
+            $job = if ($fresh) { $null } else { Start-ReleaseQuery "https://api.github.com/repos/$repo/releases?per_page=100" $(if ($cache) { $cache.ETag } else { '' }) 12 }
             $ctx.Deferred = @{ State = @{ Tool = $t; Repo = $repo; Job = $job }; Poll = {
                 param($st, $c)
                 # status：available（有新版）／latest（已是最新）／error（連不到 GitHub 等）；
                 # 連線失敗也回 ok:true，讓介面分得出「已是最新」和「查不到」（舊欄位 update、message 不變）
-                try { $res = Step-BackgroundRest $st.Job }
-                catch {
-                    $ex = $_.Exception; while ($ex.InnerException) { $ex = $ex.InnerException }
-                    Send-JsonRaw $c @{ ok = $true; update = $null; status = 'error'; message = "無法連到 GitHub：$($ex.Message)"
+                $sendError = {
+                    param($msg)
+                    Send-JsonRaw $c @{ ok = $true; update = $null; status = 'error'; message = $msg
                         current = [string]$st.Tool.Version; runFrom = $(if ($st.Tool.Id -ceq 'dev-toolbox') { $script:HubRunFrom } else { $null }) }
-                    return $true
                 }
-                if ($null -eq $res) { return $false }
+                $cache = $script:ReleaseCache[$st.Repo]
+                if ($st.Job) {
+                    try { $res = Step-BackgroundRest $st.Job }
+                    catch {
+                        $ex = $_.Exception; while ($ex.InnerException) { $ex = $ex.InnerException }
+                        & $sendError "無法連到 GitHub：$($ex.Message)"
+                        return $true
+                    }
+                    if ($null -eq $res) { return $false }
+                    $r = $res.Data | Select-Object -Last 1
+                    if ($r.notModified -and $cache) { $cache.At = Get-Date; $releases = $cache.Releases }
+                    elseif ($r.httpError) {
+                        $limited = $r.httpError -in 403, 429 -and $r.remaining -eq '0'
+                        if ($cache) { $releases = $cache.Releases }   # 被限制或 GitHub 暫時錯誤：沿用上次查到的資料
+                        elseif ($limited) {
+                            $at = try { [DateTimeOffset]::FromUnixTimeSeconds([long]$r.reset).LocalDateTime.ToString('HH:mm') } catch { '' }
+                            & $sendError ("GitHub 查詢次數已達上限（未登入每小時 60 次）" + $(if ($at) { "，約 $at 後恢復。" } else { '，請稍後再試。' }))
+                            return $true
+                        } else { & $sendError "GitHub 回應 HTTP $($r.httpError)，請稍後再試。"; return $true }
+                    } else {
+                        $releases = @($r.releases)
+                        $script:ReleaseCache[$st.Repo] = @{ ETag = [string]$r.etag; Releases = $releases; At = Get-Date }
+                    }
+                } else { $releases = $cache.Releases }
                 $t = $st.Tool
-                $offer = Select-ToolRelease $t $st.Repo $script:HubManifest.version $res.Data -LocalPython { param($id,$abi) Find-CompatibleToolPython $id $abi }
+                $offer = Select-ToolRelease $t $st.Repo $script:HubManifest.version $releases -LocalPython { param($id,$abi) Find-CompatibleToolPython $id $abi }
                 $update = $null
                 if ($offer) {
                     $script:ToolUpdateOffers[$t.Id] = @{ offer = $offer; current = $t.Version; expires = (Get-Date).AddMinutes(10) }
