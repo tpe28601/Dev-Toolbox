@@ -8,7 +8,7 @@
 }
 
 function Get-ToolLibrary {
-    $path = Join-Path $ToolUpdateStore 'library.json'
+    $path = Join-Path $HubLibraryStore 'library.json'
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $lib = Read-JsonFile $path
         if ($null -eq $lib.PSObject.Properties['icons']) { $lib | Add-Member -NotePropertyName icons -NotePropertyValue @() }
@@ -18,11 +18,11 @@ function Get-ToolLibrary {
 }
 
 # ---------------- 自訂圖示 ----------------
-# library.json 的 icons：[{ id; kind = name|emoji|image; value }]；圖片存在 <ToolUpdateStore>\icons\<id>.<ext>
+# library.json 的 icons：[{ id; kind = name|emoji|image; value }]；圖片存於本機的 Hub 設定目錄。
 $script:IconMaxBytes = 262144
 $script:IconTypes = [ordered]@{ png = 'image/png'; svg = 'image/svg+xml'; ico = 'image/x-icon' }
 
-function Get-IconDir { Join-Path $ToolUpdateStore 'icons' }
+function Get-IconDir { Join-Path $HubLibraryStore 'icons' }
 
 function Get-ToolIconFile([string]$Id) {
     if ($Id -cnotmatch '^[a-z0-9]+(-[a-z0-9]+)*$') { return $null }
@@ -81,9 +81,9 @@ function Get-ToolIconView($Library, [string]$Id) {
 }
 
 function Save-ToolLibrary($Library) {
-    [void][IO.Directory]::CreateDirectory($ToolUpdateStore)
-    $path = Join-Path $ToolUpdateStore 'library.json'
-    $temp = Join-Path $ToolUpdateStore ([guid]::NewGuid().ToString('N') + '.json')
+    [void][IO.Directory]::CreateDirectory($HubLibraryStore)
+    $path = Join-Path $HubLibraryStore 'library.json'
+    $temp = Join-Path $HubLibraryStore ([guid]::NewGuid().ToString('N') + '.json')
     try {
         [IO.File]::WriteAllText($temp, (ConvertTo-Json -InputObject $Library -Depth 6))
         if ([IO.File]::Exists($path)) { [IO.File]::Replace($temp, $path, "$temp.bak") }
@@ -162,9 +162,11 @@ function New-LocalTool($Manifest, [string]$Directory, [string]$Source, [string]$
     }
 }
 
-function Get-ImportedToolStore([string]$Path) {
-    $hubDataRoot = Split-Path -Parent (Split-Path -Parent $ToolUpdateStore)
-    return Get-ToolUpdateStore $Path (Join-Path (Split-Path -Parent $hubDataRoot) 'standalone')
+function Get-ImportedToolStore([string]$Path, [string]$Id) {
+    $legacy = Get-ToolUpdateStore $Path (Join-Path (Get-ToolDataRoot) 'standalone')
+    if (-not $script:ToolReleaseRepos.ContainsKey($Id)) { return $legacy }
+    $updater = Join-Path $HubRoot 'ui-kit\Standalone-Update.ps1'
+    return (Get-PortableUpdateStore $Path $legacy $Id $updater)
 }
 
 function Get-HubLibraryTools([switch]$IncludeCatalog) {
@@ -187,7 +189,7 @@ function Get-HubLibraryTools([switch]$IncludeCatalog) {
         try {
             $m = Read-ImportedTool $record.path
             if ($m.id -cne $record.id) { throw '工具 ID 已變更，請重新匯入。' }
-            $standaloneStore = Get-ImportedToolStore $record.path
+            $standaloneStore = Get-ImportedToolStore $record.path $m.id
             $active = Resolve-ToolUpdateDir $standaloneStore $m.id $m.version $record.path
             if ($active -ne $record.path) { $m = Read-ImportedTool $active }
             $tools[$m.id] = New-LocalTool $m $active 'import'

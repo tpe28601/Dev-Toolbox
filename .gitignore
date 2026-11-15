@@ -1,5 +1,8 @@
 # 使用者資料一律放在 %LOCALAPPDATA%\DevToolbox，這裡只是保險
 profiles/
+.dev-toolbox-id
+/updates/
+/.updates-*.tmp/
 history.jsonl
 job-history.jsonl
 jobs/

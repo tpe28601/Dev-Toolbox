@@ -20,6 +20,7 @@ $ErrorActionPreference = 'Stop'
 $HubRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $HubRoot 'ui-kit\cli-kit.ps1')
 . (Join-Path $PSScriptRoot 'Tool-Updates.ps1')
+. (Join-Path $PSScriptRoot 'Hub-Installation.ps1')
 if ($NoColor) { Set-TbNoColor $true }
 
 function Read-JsonFile([string]$Path) {
@@ -44,7 +45,8 @@ function Get-HubDataRoot {
 }
 
 if (-not $InstallationRoot) { $InstallationRoot = $HubRoot }
-$ToolUpdateStore = Get-ToolUpdateStore $InstallationRoot (Get-HubDataRoot)
+$HubLibraryStore = Get-HubLegacyStore $InstallationRoot (Get-HubDataRoot)
+$ToolUpdateStore = Get-HubUpdateStore $InstallationRoot $HubLibraryStore $HubRoot
 $hubVersion = (Read-JsonFile (Join-Path $HubRoot 'tool.json')).version
 $activeHubDir = Resolve-ToolUpdateDir $ToolUpdateStore 'dev-toolbox' $hubVersion $HubRoot
 if ($activeHubDir -ne $HubRoot) {

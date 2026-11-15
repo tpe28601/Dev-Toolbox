@@ -35,7 +35,11 @@ Dev-Toolbox Hub：本機工具主控台（只綁 127.0.0.1）。
 
 開啟工具頁會自動檢查該工具的公開 Releases，支援 Agents Cfg Manager、Build Runner、Git Ref Manager、Key Manager、HLK Viewer 和 Script Editor。有相容的正式版才會顯示「下載更新」。確認後才會下載。若工具由 Hub 啟動，Hub 會在套件驗證完成後停止工具、切換版本並重啟。新版啟動檢查失敗時會切回原本版本。在 Hub 外啟動的 Web 服務須先手動關閉。
 
-Hub 和 `Run-Hub.bat` 共用資料目錄下的 `tool-updates\`。每份 Toolbox 安裝有自己的更新目錄，Git checkout 和工具的使用者資料保留。新版 ZIP 需要包含實際執行所需的工具檔案；Python 工具使用 Hub 設定的直譯器、環境變數或系統 Python。若依賴原本工具目錄下的 `.venv`，請在 Hub 設定中指定可用的 Python。
+Hub 和 `Run-Hub.bat` 使用原啟動資料夾底下的 `updates\`。由 Hub 管理的工具共用此位置；獨立工具使用自己的 `updates\`。搬移或複製整個資料夾即可帶走目前的程式版本，複製後兩份會各自更新。
+
+Hub 的設定、自訂連結、圖示、匯入清單和工具資料仍在使用者的資料目錄。Hub 以 `.dev-toolbox-id` 在同一帳號內找回原有的清單和圖示。請保留它以便在原帳號延續設定。
+
+從舊版升級後，請先從原位置重開一次 Hub。程式會複製已啟用的版本及其共用 Python 到 `updates\`，保留本機舊目錄。無法寫入、仍在更新或遷移失敗時，會繼續使用舊更新位置。Git checkout 請先更新原資料夾的程式碼。舊版獨立工具的原始啟動程式仍查找舊位置時，從新版 ZIP 將 `Standalone-Update.ps1` 和 `Tool-Updates.ps1` 更新到原工具目錄，再啟動一次完成遷移。
 
 ### 清理舊版檔案
 
@@ -63,7 +67,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Pack-Updates.ps1 -PythonHo
 
 `-WorkingTree` 可從目前工作目錄製作本機試用包。公開發版請使用已提交的版本，並以各 repo 的新版 tag 分開打包。
 
-Hub 0.4.4 從完整版取出的 Python 存在 `%LOCALAPPDATA%\DevToolbox\shared-python`，有設定 `DEVTOOLBOX_DATA` 時則放在該目錄下。下一個工具能使用相容的共用 Python 時，Hub 會選擇輕量版。新版獨立啟動檔也會找這個目錄。Key Manager 的輕量 ZIP 在用完整打包流程產出時，會包含自己的 Python 相依套件，並記錄所需的 Python 版本和平台。
+可攜更新從完整版取出的共用 Python 放在 `updates\shared-python\`，工具用相對路徑找它。這裡有相容的 Python 時，Hub 可選擇輕量版。沿用 LocalAppData 更新的安裝仍可使用原本的共用 Python。Key Manager 的輕量 ZIP 包含自己的 Python 相依套件，並記錄所需的 Python 版本和平台。
 
 「管理工具」可以解除安裝 Hub 下載的工具，保留其資料及共用 Python。官方工具的「清除資料」會在確認視窗列出目前使用的預設資料目錄。請先關閉工具的所有視窗。設定頁的「重設 Hub 設定」會清除外觀、指定的 Python 路徑、匯入清單、連結與顯示偏好。
 

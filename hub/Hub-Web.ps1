@@ -29,6 +29,7 @@ function Read-JsonFile([string]$Path) {
 
 $script:HubManifest = Read-JsonFile (Join-Path $HubRoot 'tool.json')
 . (Join-Path $PSScriptRoot 'Tool-Updates.ps1')
+. (Join-Path $PSScriptRoot 'Hub-Installation.ps1')
 
 # ---------------- 資料夾（TOOL-SPEC 第 6 節：--data-dir > DEVTOOLBOX_DATA > LOCALAPPDATA） ----------------
 function Resolve-HubDataDir([string]$Override) {
@@ -39,7 +40,8 @@ function Resolve-HubDataDir([string]$Override) {
 }
 $script:DataDir = Resolve-HubDataDir $DataDir
 if (-not $InstallationRoot) { $InstallationRoot = $HubRoot }
-$script:ToolUpdateStore = Get-ToolUpdateStore $InstallationRoot (Resolve-HubDataDir '')
+$script:HubLibraryStore = Get-HubLegacyStore $InstallationRoot (Resolve-HubDataDir '')
+$script:ToolUpdateStore = Get-HubUpdateStore $InstallationRoot $script:HubLibraryStore $HubRoot
 $script:ToolUpdateOffers = @{}
 $activeHubDir = Resolve-ToolUpdateDir $ToolUpdateStore 'dev-toolbox' $script:HubManifest.version $HubRoot
 if ($activeHubDir -ne $HubRoot) {
@@ -48,8 +50,9 @@ if ($activeHubDir -ne $HubRoot) {
     & (Join-Path $activeHubDir 'hub\Hub-Web.ps1') @launch
     return
 }
-# Hub 從哪裡執行（設定頁「更新」卡片顯示）：Hub 更新資料夾／Git 資料夾／一般安裝資料夾
-$script:HubRunFrom = if ($HubRoot.StartsWith($script:ToolUpdateStore, [StringComparison]::OrdinalIgnoreCase)) { 'store' }
+# An upgrade can still be running from LocalAppData during the first migration.
+$script:HubRunFrom = if (($HubRoot.StartsWith($script:ToolUpdateStore.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) -or
+        ($HubRoot.StartsWith($script:HubLibraryStore.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase))) { 'store' }
     elseif (Test-Path -LiteralPath (Join-Path $HubRoot '.git')) { 'git' } else { 'folder' }
 foreach ($d in @($script:DataDir, (Join-Path $script:DataDir 'jobs'))) {
     if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
@@ -185,7 +188,14 @@ function Resolve-PythonExe([string]$ToolDir) {
     return $null
 }
 
-function Find-CompatibleToolPython([string]$Id, [string]$Abi) {
+function Find-CompatibleToolPython([string]$Id, [string]$Abi, [string]$Store) {
+    if ((Split-Path -Leaf $Store) -eq 'updates') {
+        foreach ($candidate in @(Get-SharedPythonCandidates $Store)) {
+            $exe = Get-CompatibleToolPython $candidate $Id '' $Abi
+            if ($exe) { return $exe }
+        }
+        return
+    }
     foreach ($candidate in @(Get-PythonCandidates $null | Where-Object found)) {
         $exe = Get-CompatibleToolPython $candidate.path $Id '' $Abi
         if ($exe) { return $exe }
@@ -800,7 +810,7 @@ function Invoke-ToolUpdate($Tool, $Offer, [bool]$RestartConfirmed) {
     if ($running -and -not $running.managed) { throw '請先關閉在 Hub 外啟動的工具，再重新更新。' }
     if ($running -and -not $RestartConfirmed) { throw '工具已開始執行，請重新檢查更新並確認重新啟動。' }
     $state = @{ stopped = $false }
-    $store = if ($Tool.Source -eq 'import') { Get-ImportedToolStore $Tool.ImportPath } else { $ToolUpdateStore }
+    $store = if ($Tool.Source -eq 'import') { Get-ImportedToolStore $Tool.ImportPath $id } else { $ToolUpdateStore }
     return (Install-ToolRelease $store $Tool $Offer {
         if ($running) {
             $proc = $script:ToolProcs[$id].Proc
@@ -1152,6 +1162,7 @@ function Route-Request($req, $ctx) {
                     # 介面用來判斷伺服器是不是新程式（介面檔更新後、伺服器沒重開時提示）
                     features = @('cleanup', 'hub-update-status')
                     runFrom = $script:HubRunFrom
+                    updateStorage = if ($script:ToolUpdateStore -eq $script:HubLibraryStore) { 'local' } else { 'portable' }
                 })
                 return
             }
@@ -1375,7 +1386,8 @@ function Route-Request($req, $ctx) {
                     }
                 } else { $releases = $cache.Releases }
                 $t = $st.Tool
-                $offer = Select-ToolRelease $t $st.Repo $script:HubManifest.version $releases -LocalPython { param($id,$abi) Find-CompatibleToolPython $id $abi }
+                $store = if ($t.Source -eq 'import') { Get-ImportedToolStore $t.ImportPath $t.Id } else { $ToolUpdateStore }
+                $offer = Select-ToolRelease $t $st.Repo $script:HubManifest.version $releases -LocalPython { param($id,$abi) Find-CompatibleToolPython $id $abi $store }
                 $update = $null
                 if ($offer) {
                     $script:ToolUpdateOffers[$t.Id] = @{ offer = $offer; current = $t.Version; expires = (Get-Date).AddMinutes(10) }

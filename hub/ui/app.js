@@ -805,8 +805,11 @@ function renderHubStatus() {
   const runFrom = (state.hub && state.hub.runFrom) || (check && check.runFrom) || '';
   $('hubVerText').textContent = target ? `v${target.version}` : '';
   const where = RUN_FROM[runFrom];
-  $('hubRunFrom').textContent = where ? ` · ${where[0]}` : '';
-  $('hubRunFrom').title = where ? where[1] : '';
+  const localUpdates = state.hub?.updateStorage === 'local';
+  $('hubRunFrom').textContent = where ? ` · ${where[0]}${localUpdates ? ' · 更新暫存於本機帳號' : ''}` : '';
+  $('hubRunFrom').title = localUpdates
+    ? '更新目前使用 LocalAppData。更新完成後可從原位置重開 Hub，或確認安裝資料夾可寫入。'
+    : (where ? where[1] : '');
   const status = $('hubUpdateStatus');
   let text = '檢查中…', tone = 'muted', title = '';
   const oldServer = state.hub && !(Array.isArray(state.hub.features) && state.hub.features.includes('hub-update-status'));
