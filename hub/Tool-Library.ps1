@@ -131,7 +131,11 @@ function Remove-HubDirectory([string]$Root, [string]$Id) {
 
 function Read-ImportedTool([string]$Directory) {
     if ($Directory -notmatch '^[A-Za-z]:[\\/]') { throw '請指定本機工具資料夾的完整路徑。' }
-    $m = Read-JsonFile (Join-Path $Directory 'tool.json')
+    if (-not [IO.Directory]::Exists($Directory)) { throw "找不到這個資料夾：$Directory" }
+    $manifestPath = Join-Path $Directory 'tool.json'
+    if (-not [IO.File]::Exists($manifestPath)) { throw '這個資料夾裡沒有 tool.json，不是 Toolbox 工具資料夾。請選擇工具的根目錄。' }
+    try { $m = Read-JsonFile $manifestPath }
+    catch { throw 'tool.json 不是有效的 JSON，請檢查檔案內容。' }
     if ($m.kind -cne 'tool' -or $m.specVersion -ne 1 -or $m.id -isnot [string] -or $m.id -cnotmatch '^[a-z0-9]+(-[a-z0-9]+)*$' -or
         $m.id.Length -gt 40 -or $m.id -eq 'dev-toolbox' -or $m.id -like 'link-*' -or
         $m.name -isnot [string] -or [string]::IsNullOrWhiteSpace($m.name) -or $m.name.Length -gt 60 -or
