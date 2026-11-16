@@ -1107,6 +1107,79 @@ function Get-CleanupJobView {
         label = [string]$j.Shared.label; result = $j.Result; error = $j.Error }
 }
 
+# ---------------- 安裝／更新：下載與驗證在背景，Hub 照常回應 ----------------
+# stage：download（下載中，有位元組進度）→ verify（驗證 SHA-256）→ install（解壓、切換版本、重啟工具，在主迴圈執行）→ done／failed。
+# 下載驗證完成後，下一次查詢進度時才開始安裝，讓畫面先顯示「安裝中」。一次只跑一個安裝工作。
+$script:UpdateJob = $null
+
+function Get-ErrorMessage($err) {
+    if ($err.TargetObject -is [hashtable] -and $err.TargetObject.message) { return [string]$err.TargetObject.message }
+    $ex = $err.Exception; while ($ex.InnerException) { $ex = $ex.InnerException }
+    return $ex.Message
+}
+
+function Start-UpdateJob($Tool, $Offer, [string]$Kind, [bool]$Restart) {
+    $progress = [hashtable]::Synchronized(@{ stage = 'download'; received = 0L; total = [long]$Offer.size })
+    $path = Join-Path ([IO.Path]::GetTempPath()) ('dev-toolbox-dl-' + [guid]::NewGuid().ToString('N') + '.zip')
+    $ps = [PowerShell]::Create()
+    [void]$ps.AddScript({
+        param($dir, $offer, $path, $progress)
+        $ErrorActionPreference = 'Stop'
+        . (Join-Path $dir 'Tool-Updates.ps1')
+        try {
+            Get-ToolReleaseFile $offer $path 600000 $progress
+            $progress.stage = 'verify'
+            if ((Get-Item -LiteralPath $path).Length -ne [long]$offer.size -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $offer.sha256) {
+                throw '下載檔案大小或 SHA-256 與 Release 不符。'
+            }
+        } catch {
+            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+            throw
+        }
+        'ok'
+    }).AddArgument($PSScriptRoot).AddArgument($Offer).AddArgument($path).AddArgument($progress)
+    $script:UpdateJob = @{ Id = [guid]::NewGuid().ToString('N').Substring(0, 12); Tool = $Tool; Offer = $Offer; Kind = $Kind; Restart = $Restart
+        Path = $path; PS = $ps; Async = $ps.BeginInvoke(); Progress = $progress; State = 'running'; Result = $null; Error = '' }
+}
+
+function Complete-UpdateJob($j) {
+    $offer = if ($j.Offer -is [hashtable]) { $j.Offer.Clone() } else { $j.Offer.PSObject.Copy() }
+    if ($offer -is [hashtable]) { $offer.preparedZip = $j.Path }
+    else { $offer | Add-Member -NotePropertyName preparedZip -NotePropertyValue $j.Path -Force }
+    switch ($j.Kind) {
+        'hub' { return (Invoke-HubUpdate $j.Tool $offer) }
+        'catalog' { return (Install-ToolRelease $ToolUpdateStore $j.Tool $offer {} {} {} -SharePython) }
+        default { return (Invoke-ToolUpdate $j.Tool $offer $j.Restart) }
+    }
+}
+
+function Get-UpdateJobView {
+    $j = $script:UpdateJob
+    if (-not $j) { return $null }
+    if ($j.State -eq 'running') {
+        if ($j.Progress.stage -in 'download', 'verify') {
+            if ($j.Async.IsCompleted) {
+                try {
+                    [void]$j.PS.EndInvoke($j.Async)
+                    if ($j.PS.HadErrors -and $j.PS.Streams.Error.Count -gt 0) { throw $j.PS.Streams.Error[0].Exception }
+                    $j.Progress.stage = 'install'
+                } catch {
+                    $j.Error = "下載失敗：$(Get-ErrorMessage $_)"; $j.State = 'failed'
+                } finally { $j.PS.Dispose() }
+            }
+        } elseif ($j.Progress.stage -eq 'install') {
+            try {
+                $j.Result = Complete-UpdateJob $j
+                $j.State = 'done'; $j.Progress.stage = 'done'
+            } catch {
+                $j.Error = Get-ErrorMessage $_; $j.State = 'failed'
+            } finally { Remove-Item -LiteralPath $j.Path -Force -ErrorAction SilentlyContinue }
+        }
+    }
+    return [pscustomobject]@{ id = $j.Id; toolId = [string]$j.Tool.Id; kind = $j.Kind; state = $j.State; stage = [string]$j.Progress.stage
+        received = [long]$j.Progress.received; total = [long]$j.Progress.total; result = $j.Result; error = $j.Error }
+}
+
 # ---------------- 延後回應 ----------------
 # 需要等待的請求（啟動／停止工具、選資料夾、檢查更新）把 $ctx.Deferred 設成
 # @{ State; Poll = { param($state, $ctx) ...; 完成時填好 $ctx 並回傳 $true } }，
@@ -1174,7 +1247,7 @@ function Route-Request($req, $ctx) {
                     ok = $true; id = [string]$script:HubManifest.id; version = [string]$script:HubManifest.version
                     pid = $PID; port = $Port; uptimeSec = [int]((Get-Date) - $script:StartedAt).TotalSeconds
                     # 介面用來判斷伺服器是不是新程式（介面檔更新後、伺服器沒重開時提示）
-                    features = @('cleanup', 'hub-update-status')
+                    features = @('cleanup', 'hub-update-status', 'update-progress')
                     runFrom = $script:HubRunFrom
                     updateStorage = if ($script:ToolUpdateStore -eq $script:HubLibraryStore) { 'local' } else { 'portable' }
                 })
@@ -1190,6 +1263,10 @@ function Route-Request($req, $ctx) {
             }
             '/api/settings' {
                 Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; settings = (Get-HubSettings) })
+                return
+            }
+            '/api/tools/update/progress' {
+                Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; job = (Get-UpdateJobView) })
                 return
             }
             '/api/cleanup/status' {
@@ -1423,6 +1500,24 @@ function Route-Request($req, $ctx) {
             if (-not $checked -or $checked.current -cne $t.Version -or
                 $checked.offer.version -cne [string]$b.version -or $checked.expires -lt (Get-Date)) {
                 throw @{ code = 'UPDATE_EXPIRED'; message = '請重新檢查更新後再安裝。' }
+            }
+            # 新介面帶 async：下載在背景、回傳工作 id，畫面輪詢 /api/tools/update/progress 顯示進度；
+            # 沒帶 async（舊介面）維持原本的同步行為
+            if ($b.async -is [bool] -and $b.async) {
+                $busy = Get-UpdateJobView
+                if ($busy -and $busy.state -eq 'running') { throw @{ code = 'UPDATE_BUSY'; message = '另一個安裝或更新正在進行中，請等它完成。' } }
+                $kind = if ($t.Id -eq 'dev-toolbox') { 'hub' } elseif ($t.Source -eq 'catalog') { 'catalog' } else { 'tool' }
+                $restart = $b.restart -is [bool] -and $b.restart
+                if ($kind -eq 'hub' -and -not $restart) { throw '請確認重新啟動 Hub。' }
+                if ($kind -eq 'tool') {
+                    $running = Get-ToolStatus $t
+                    if ($running -and -not $running.managed) { throw '請先關閉在 Hub 外啟動的工具，再重新更新。' }
+                    if ($running -and -not $restart) { throw '工具已開始執行，請重新檢查更新並確認重新啟動。' }
+                }
+                $script:ToolUpdateOffers.Remove($t.Id)
+                Start-UpdateJob $t $checked.offer $kind $restart
+                Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; job = (Get-UpdateJobView) })
+                return
             }
             $script:ToolUpdateOffers.Remove($t.Id)
             if ($t.Id -eq 'dev-toolbox') {

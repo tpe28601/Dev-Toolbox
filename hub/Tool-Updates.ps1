@@ -368,7 +368,8 @@ function Get-ToolRelease($Tool, [string]$HubVersion, [scriptblock]$LocalPython) 
     return (Select-ToolRelease $Tool $repo $HubVersion $releases -LocalPython $LocalPython)
 }
 
-function Get-ToolReleaseFile($Offer, [string]$Path, [int]$TimeoutMs = 120000) {
+# $Progress（可選，同步 hashtable）：下載時更新 received（已下載位元組），給 Hub 的安裝進度條用
+function Get-ToolReleaseFile($Offer, [string]$Path, [int]$TimeoutMs = 120000, $Progress = $null) {
     Add-Type -AssemblyName System.Net.Http
     $client = [Net.Http.HttpClient]::new()
     $timeout = [Threading.CancellationTokenSource]::new($TimeoutMs)
@@ -386,6 +387,7 @@ function Get-ToolReleaseFile($Offer, [string]$Path, [int]$TimeoutMs = 120000) {
                     $total += $count
                     if ($total -gt $Offer.size) { throw '下載檔案大小與 Release 不符。' }
                     $outputStream.Write($buffer, 0, $count)
+                    if ($Progress) { $Progress.received = $total }
                 }
             } finally { $outputStream.Dispose() }
         } finally { $response.Dispose() }
@@ -479,7 +481,9 @@ function Install-ToolRelease([string]$Store, $Tool, $Offer, [scriptblock]$Before
         [void][IO.Directory]::CreateDirectory($stage)
         $zip = Join-Path $stage 'release.zip'
         $payload = Join-Path $stage 'payload'
-        Get-ToolReleaseFile $Offer $zip
+        # Hub 會先在背景下載並驗證（preparedZip），這裡只搬進暫存區；沒有時照舊直接下載
+        if ($Offer.preparedZip -and [IO.File]::Exists([string]$Offer.preparedZip)) { [IO.File]::Move([string]$Offer.preparedZip, $zip) }
+        else { Get-ToolReleaseFile $Offer $zip }
         if ((Get-Item -LiteralPath $zip).Length -ne $Offer.size -or (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $Offer.sha256) {
             throw '下載檔案大小或 SHA-256 與 Release 不符。'
         }

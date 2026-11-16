@@ -847,16 +847,43 @@ function packageDetails(update) {
     .filter(Boolean).join(' · ');
 }
 
-async function downloadAndInstall(name, request) {
-  $('installProgressTitle').textContent = name;
+// 安裝／更新進度：下載有百分比與已下載大小；驗證、安裝階段用不定進度條。
+// 新伺服器回傳 job 後輪詢 /api/tools/update/progress；舊伺服器直接回傳 result（維持原本行為）。
+const INSTALL_STAGES = { download: '下載中', verify: '驗證檔案中', install: '安裝中（解壓並切換版本）', done: '完成' };
+function fmtMB(n) { return (Number(n || 0) / 1048576).toFixed(1); }
+function renderInstallProgress(job) {
+  const stage = job ? job.stage : 'download';
+  const bar = $('installProgressBar');
+  const wrap = bar.parentElement;
+  const known = stage === 'download' && job && job.total > 0;
+  const pct = known ? Math.min(100, Math.floor(job.received * 100 / job.total)) : 0;
+  wrap.classList.toggle('tb-progress--indeterminate', !known);
+  bar.style.width = known ? pct + '%' : '';
+  wrap.setAttribute('aria-valuenow', known ? String(pct) : '');
   const status = $('installProgressStatus');
   status.innerHTML = icon('loader');
-  status.append(document.createTextNode('正在下載、驗證並安裝…'));
+  status.append(document.createTextNode(INSTALL_STAGES[stage] || '處理中'));
+  $('installProgressDetail').textContent = known
+    ? `${pct}% · ${fmtMB(job.received)} / ${fmtMB(job.total)} MB`
+    : stage === 'install' ? '需要幾秒鐘，請不要關閉 Hub。' : '';
+}
+async function downloadAndInstall(name, request) {
+  $('installProgressTitle').textContent = name;
+  renderInstallProgress(null);
   installProgress.showModal();
   try {
     // Let the browser paint the progress dialog before starting the request.
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
-    return await apiPost('/api/tools/update/apply', request);
+    const started = await apiPost('/api/tools/update/apply', { ...request, async: true });
+    if (!started.job) return started;   // 舊伺服器：同步完成
+    for (let job = started.job; ;) {
+      renderInstallProgress(job);
+      if (job.state === 'done') return { result: job.result };
+      if (job.state === 'failed') throw new Error(job.error || '安裝失敗。');
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      ({ job } = await apiGet('/api/tools/update/progress'));
+      if (!job) throw new Error('找不到安裝工作，請重新檢查更新。');
+    }
   } finally {
     installProgress.close();
   }
