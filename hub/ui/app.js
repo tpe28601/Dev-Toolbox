@@ -1303,6 +1303,15 @@ function moreMenu(t, items) {
       it.addEventListener('click', () => { closeMoreMenu(); action(); });
       menu.append(it);
     }
+    // 鍵盤：↑／↓ 在選項間移動（循環），Home／End 到第一／最後一項
+    menu.addEventListener('keydown', (e) => {
+      const list = [...menu.querySelectorAll('.hub-menu__item')];
+      const i = list.indexOf(document.activeElement);
+      const next = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: list.length - 1 }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      list[(next + list.length) % list.length].focus();
+    });
     document.body.append(menu);
     const r = b.getBoundingClientRect();
     const w = menu.offsetWidth, h = menu.offsetHeight;
