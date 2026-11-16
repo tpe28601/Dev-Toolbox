@@ -47,6 +47,7 @@ function Get-HubDataRoot {
 if (-not $InstallationRoot) { $InstallationRoot = $HubRoot }
 $HubLibraryStore = Get-HubLegacyStore $InstallationRoot (Get-HubDataRoot)
 $ToolUpdateStore = Get-HubUpdateStore $InstallationRoot $HubLibraryStore $HubRoot
+$HubLibraryDataStore = $HubLibraryStore   # Tool-Library.ps1 存 library.json 與圖示的位置（Hub-Web 用 -DataDir 時才會不同）
 $hubVersion = (Read-JsonFile (Join-Path $HubRoot 'tool.json')).version
 $activeHubDir = Resolve-ToolUpdateDir $ToolUpdateStore 'dev-toolbox' $hubVersion $HubRoot
 if ($activeHubDir -ne $HubRoot) {

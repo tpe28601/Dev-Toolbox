@@ -42,6 +42,8 @@ $script:DataDir = Resolve-HubDataDir $DataDir
 if (-not $InstallationRoot) { $InstallationRoot = $HubRoot }
 $script:HubLibraryStore = Get-HubLegacyStore $InstallationRoot (Resolve-HubDataDir '')
 $script:ToolUpdateStore = Get-HubUpdateStore $InstallationRoot $script:HubLibraryStore $HubRoot
+# library.json 與自訂圖示：有指定 -DataDir 時跟著 DataDir（測試或另一份設定），沒指定時維持原本位置
+$script:HubLibraryDataStore = if ($DataDir) { Get-HubLegacyStore $InstallationRoot $script:DataDir } else { $script:HubLibraryStore }
 $script:ToolUpdateOffers = @{}
 $activeHubDir = Resolve-ToolUpdateDir $ToolUpdateStore 'dev-toolbox' $script:HubManifest.version $HubRoot
 if ($activeHubDir -ne $HubRoot) {

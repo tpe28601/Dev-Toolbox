@@ -8,7 +8,7 @@
 }
 
 function Get-ToolLibrary {
-    $path = Join-Path $HubLibraryStore 'library.json'
+    $path = Join-Path $HubLibraryDataStore 'library.json'
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $lib = Read-JsonFile $path
         if ($null -eq $lib.PSObject.Properties['icons']) { $lib | Add-Member -NotePropertyName icons -NotePropertyValue @() }
@@ -22,7 +22,7 @@ function Get-ToolLibrary {
 $script:IconMaxBytes = 262144
 $script:IconTypes = [ordered]@{ png = 'image/png'; svg = 'image/svg+xml'; ico = 'image/x-icon' }
 
-function Get-IconDir { Join-Path $HubLibraryStore 'icons' }
+function Get-IconDir { Join-Path $HubLibraryDataStore 'icons' }
 
 function Get-ToolIconFile([string]$Id) {
     if ($Id -cnotmatch '^[a-z0-9]+(-[a-z0-9]+)*$') { return $null }
@@ -81,9 +81,9 @@ function Get-ToolIconView($Library, [string]$Id) {
 }
 
 function Save-ToolLibrary($Library) {
-    [void][IO.Directory]::CreateDirectory($HubLibraryStore)
-    $path = Join-Path $HubLibraryStore 'library.json'
-    $temp = Join-Path $HubLibraryStore ([guid]::NewGuid().ToString('N') + '.json')
+    [void][IO.Directory]::CreateDirectory($HubLibraryDataStore)
+    $path = Join-Path $HubLibraryDataStore 'library.json'
+    $temp = Join-Path $HubLibraryDataStore ([guid]::NewGuid().ToString('N') + '.json')
     try {
         [IO.File]::WriteAllText($temp, (ConvertTo-Json -InputObject $Library -Depth 6))
         if ([IO.File]::Exists($path)) { [IO.File]::Replace($temp, $path, "$temp.bak") }
