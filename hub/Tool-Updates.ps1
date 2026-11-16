@@ -144,6 +144,12 @@ function Resolve-ToolUpdateDir([string]$Store, [string]$Id, [string]$BundledVers
 }
 
 function Read-ToolReleaseManifest($Asset, [string]$Url) {
+    # Hub 會在背景先抓好較新版本的 manifest 放進 $script:ToolManifestCache，這裡直接用，不在主迴圈下載
+    if ($script:ToolManifestCache -and $script:ToolManifestCache.ContainsKey($Url)) {
+        $cached = $script:ToolManifestCache[$Url]
+        if ($cached -is [pscustomobject]) { return $cached }
+        return
+    }
     $size = [long]$Asset.size
     if ($size -le 0 -or $size -gt $script:MaxToolManifestBytes -or
         $Asset.digest -notmatch '^sha256:([0-9a-f]{64})$') { return }

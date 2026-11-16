@@ -1031,10 +1031,12 @@ function Start-BackgroundRest([string]$Uri, $Headers, [int]$TimeoutSec = 12) {
 # GitHub Releases 查詢：帶 If-None-Match（ETag），304 不計入 GitHub 未登入每小時 60 次的上限。
 # 回傳 @{ etag; releases } 或 @{ notModified } 或 @{ httpError; remaining; reset }；連線失敗 throw。
 $script:ReleaseCache = @{}   # repo → @{ ETag; Releases; At }
-function Start-ReleaseQuery([string]$Uri, [string]$ETag, [int]$TimeoutSec = 12) {
+# 同時在背景先抓好比目前版本新的 Release manifest（最多 5 個），主迴圈挑版本時直接用快取，不會被下載卡住
+$script:ToolManifestCache = @{}   # manifest 網址 → 內容（抓不到記成 'fail'）
+function Start-ReleaseQuery([string]$Uri, [string]$ETag, [int]$TimeoutSec = 12, [string]$ToolId = '', [string]$Current = '', [string]$Repo = '') {
     $ps = [PowerShell]::Create()
     [void]$ps.AddScript({
-        param($u, $etag, $t)
+        param($u, $etag, $t, $dir, $toolId, $current, $repo)
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         $rq = [Net.HttpWebRequest]::Create($u)
         $rq.Timeout = $t * 1000; $rq.ReadWriteTimeout = $t * 1000
@@ -1054,9 +1056,29 @@ function Start-ReleaseQuery([string]$Uri, [string]$ETag, [int]$TimeoutSec = 12) 
             $reader = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
             # 存在變數裡（不要直接輸出）：Windows PowerShell 5.1 才不會把陣列當一筆或拆開
             $list = $reader.ReadToEnd() | ConvertFrom-Json
-            return @{ etag = [string]$resp.Headers['ETag']; releases = @($list) }
+            $etagOut = [string]$resp.Headers['ETag']
         } finally { $resp.Close() }
-    }).AddArgument($Uri).AddArgument($ETag).AddArgument($TimeoutSec)
+        $manifests = @{}
+        if ($toolId -and $repo) {
+            . (Join-Path $dir 'Tool-Updates.ps1')
+            $cur = ConvertTo-ToolVersion $current
+            if (-not $cur) { $cur = [version]'0.0.0' }
+            $newer = foreach ($rel in @($list)) {
+                if ($rel.draft -or $rel.prerelease -or $rel.tag_name -cnotmatch '^v(.+)$') { continue }
+                $v = ConvertTo-ToolVersion $Matches[1]
+                if ($v -and $v -gt $cur) { @{ v = $v; rel = $rel } }
+            }
+            foreach ($c in @($newer | Sort-Object { $_.v } -Descending | Select-Object -First 5)) {
+                $text = $c.v.ToString(); $name = "$toolId-$text.update.json"
+                $asset = @($c.rel.assets | Where-Object { $_.name -ceq $name })
+                if ($asset.Count -ne 1 -or $asset[0].state -ne 'uploaded') { continue }
+                $url = "https://github.com/$repo/releases/download/v$text/$name"
+                $m = Read-ToolReleaseManifest $asset[0] $url
+                $manifests[$url] = if ($m) { $m } else { 'fail' }
+            }
+        }
+        return @{ etag = $etagOut; releases = @($list); manifests = $manifests }
+    }).AddArgument($Uri).AddArgument($ETag).AddArgument($TimeoutSec).AddArgument($PSScriptRoot).AddArgument($ToolId).AddArgument($Current).AddArgument($Repo)
     return @{ PS = $ps; Async = $ps.BeginInvoke() }
 }
 
@@ -1442,7 +1464,7 @@ function Route-Request($req, $ctx) {
             # 同一個 repo 2 分鐘內直接用快取（按「檢查更新」force 時才重查）；重查帶 ETag，沒變動回 304、不計入次數上限。
             $cache = $script:ReleaseCache[$repo]
             $fresh = $cache -and ((Get-Date) - $cache.At).TotalSeconds -lt 120 -and -not ($b.force -is [bool] -and $b.force)
-            $job = if ($fresh) { $null } else { Start-ReleaseQuery "https://api.github.com/repos/$repo/releases?per_page=100" $(if ($cache) { $cache.ETag } else { '' }) 12 }
+            $job = if ($fresh) { $null } else { Start-ReleaseQuery "https://api.github.com/repos/$repo/releases?per_page=100" $(if ($cache) { $cache.ETag } else { '' }) 12 $t.Id ([string]$t.Version) $repo }
             $ctx.Deferred = @{ State = @{ Tool = $t; Repo = $repo; Job = $job }; Poll = {
                 param($st, $c)
                 # status：available（有新版）／latest（已是最新）／error（連不到 GitHub 等）；
@@ -1474,6 +1496,7 @@ function Route-Request($req, $ctx) {
                     } else {
                         $releases = @($r.releases)
                         $script:ReleaseCache[$st.Repo] = @{ ETag = [string]$r.etag; Releases = $releases; At = Get-Date }
+                        if ($r.manifests) { foreach ($k in @($r.manifests.Keys)) { $script:ToolManifestCache[$k] = $r.manifests[$k] } }
                     }
                 } else { $releases = $cache.Releases }
                 $t = $st.Tool
@@ -1487,7 +1510,7 @@ function Route-Request($req, $ctx) {
                 $message = if (-not $offer -and $t.Source -eq 'catalog' -and $t.Id -in $script:PortablePythonToolIds) {
                     '目前沒有相容的安裝套件。輕量版需要 Python 3.11 以上及工具所需的相依套件；也可以等待發布內附 Python 的完整版。'
                 }
-                Send-JsonRaw $c @{ ok = $true; update = $update; message = $message; status = $(if ($update) { 'available' } else { 'latest' })
+                Send-JsonRaw $c @{ ok = $true; update = $update; message = [string]$message; status = $(if ($update) { 'available' } else { 'latest' })
                     current = [string]$t.Version; runFrom = $(if ($t.Id -ceq 'dev-toolbox') { $script:HubRunFrom } else { $null }) }
                 return $true
             } }
