@@ -129,10 +129,22 @@ function Save-HubSettings($obj) {
     Move-Item -LiteralPath $tmp -Destination $script:SettingsFile -Force
 }
 
-function Get-PythonVersion([string]$Exe) {
+# 每個 python 執行檔的版本檢查結果快取 5 分鐘（以路徑＋檔案修改時間為鍵），設定頁不用每次都等 python 啟動；
+# 使用者按「檢查」或儲存路徑時用 -Fresh 重新檢查。
+$script:PythonVersionCache = @{}
+function Get-PythonVersion([string]$Exe, [switch]$Fresh) {
     # 執行 python 取版本；3 秒逾時。回傳 @{ ok; version; message }
     if (-not $Exe) { return @{ ok = $false; version = ''; message = '沒有路徑' } }
     if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) { return @{ ok = $false; version = ''; message = '檔案不存在' } }
+    $key = $Exe.ToLowerInvariant() + '|' + ([IO.File]::GetLastWriteTimeUtc($Exe).Ticks)
+    $hit = $script:PythonVersionCache[$key]
+    if (-not $Fresh -and $hit -and $hit.At -gt (Get-Date).AddMinutes(-5)) { return $hit.Result }
+    $result = Invoke-PythonVersionProbe $Exe
+    $script:PythonVersionCache[$key] = @{ At = Get-Date; Result = $result }
+    return $result
+}
+
+function Invoke-PythonVersionProbe([string]$Exe) {
     try {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $Exe
@@ -1456,7 +1468,7 @@ function Route-Request($req, $ctx) {
             if ($null -ne $b.pythonPath) {
                 $pp = ([string]$b.pythonPath).Trim().Trim('"')
                 if ($pp) {
-                    $v = Get-PythonVersion $pp
+                    $v = Get-PythonVersion $pp -Fresh
                     if (-not $v.ok) { throw @{ code = 'BAD_PYTHON'; message = "這個 Python 不能用：$($v.message)" } }
                 }
                 $cur.pythonPath = $pp
@@ -1469,7 +1481,7 @@ function Route-Request($req, $ctx) {
             $b = Read-JsonBody $req
             $pp = ([string]$b.path).Trim().Trim('"')
             if (-not $pp) { throw @{ code = 'BAD_ARGS'; message = '缺少 path' } }
-            $v = Get-PythonVersion $pp
+            $v = Get-PythonVersion $pp -Fresh
             Send-JsonRaw $ctx ([pscustomobject]@{ ok = $true; result = [pscustomobject]@{ path = $pp; usable = [bool]$v.ok; version = $v.version; message = $v.message } })
             return
         }
